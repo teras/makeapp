@@ -45,6 +45,10 @@ DOCOMPRESS:=$(shell echo $(COMPRESS) | tr A-Z a-z | cut -c1-1)
 
 BUILDDEP:=$(wildcard *.nim *.c *.m Makefile config.mk)
 
+
+initlocal:
+	${NIMVER} ${NIMBLE}
+
 local:target/${EXECNAME}
 
 all:$(ALLTARGETS)
@@ -65,7 +69,7 @@ clean:
 	rm -rf target nimcache ${NAME} ${NAME}.exe
 
 target/${EXECNAME}:${BUILDDEP}
-	${NIMVER} ${NIMBLE} nim ${COMPILER} ${BASENIMOPTS} ${OSXNIMOPTS} ${NAME}
+	nim ${COMPILER} ${BASENIMOPTS} ${OSXNIMOPTS} ${NAME}
 	mkdir -p target
 	mv ${NAME} target/${EXECNAME}
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME} ; fi

@@ -15,6 +15,7 @@ proc findDmg*(base:string) : string =
 
 proc findApp*(base:string) : string =
     if base.endsWith(".app"): return base
+    if base.endsWith(".app/"): return base.substr(0,base.len-1)
     for file in walkDirRec(base, yieldFilter={pcDir}):
         if file.endsWith(".app"):
             return file

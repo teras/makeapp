@@ -1,4 +1,4 @@
-import parsecfg, plists, argparse
+import parsecfg, plists, argparse, sets
 import sendtoapple, sign, helper
 
 const PASS_CORE_LOC = ".ssh/notarizing"
@@ -6,12 +6,13 @@ const PASS_CORE_LOC = ".ssh/notarizing"
 const p = newParser("notarizing"):
     help("Notarize and sign DMG files for the Apple store, to make later versions of macOS happy. For more info check https://github.com/teras/notarizing")
     arg("command", help="The command type, should be either 'send' or 'sign'")
-    option("-b", "--bundleid", help="The required BundleID. When missiing the system guess from existing PList files inside an .app folder")
+    option("-b", "--bundleid", help="The required BundleID. When missing, the system guess from existing PList files inside an .app folder")
     option("-t", "--target", help="The location of the target file (DMG when sending to Apple, DIR.app when signing). When missing the system will scan the directory tree below this point")
     option("-p", "--password", help="The location of the password file. Defaults to ~/" & PASS_CORE_LOC)
     option("-u", "--user", help="The Apple username")
     option("-a", "--ascprovider", help="The specific associated provider for the current Apple developer account")
     option("-i", "--signid", help="The sign id, as given by `security find-identity -v -p codesigning`")
+    option("-x", "--allowedext", multiple=true, help="Allow this file extension as an executable when signing, except the default ones. Could be used more than once")
 let opts = p.parse(commandLineParams())
 if opts.help: quit()
 
@@ -22,7 +23,7 @@ if opts.command == "sign":
     var target = findApp(if opts.target != "": opts.target else: getCurrentDir())
     if target == "": target = findDmg(if opts.target != "": opts.target else: getCurrentDir())
     if target == "": quit("No target file provided")
-    sign(target, signid)
+    sign(target, signid, opts.allowedext.toHashSet)
 elif opts.command == "send":
     let password = if opts.password != "": opts.password else: config.getSectionValue("","APPLE_APP_PASSWORD")
     if password == "": quit("No password provided")

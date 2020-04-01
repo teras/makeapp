@@ -1,5 +1,5 @@
 NAME=notarizing
-NIMBLE=plists argparse
+NIMBLE=plists argparse nim_miniz tempfile
 ALLTARGETS=osx
 RUNARGS=sign
 #DEBUG=true
