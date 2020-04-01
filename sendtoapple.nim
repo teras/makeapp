@@ -20,7 +20,7 @@ proc sendToApple*(bundleId:string, dmg:string, user:string, password:string, asc
     echo "Bundle ID: " & bundleId
     echo "DMG: " & dmg
     echo "Username: " & user
-    if asc_provider!="": echo "Using ASC Provider"
+    if asc_provider!="": echo "Associated Provider: " & asc_provider
     stdout.write "Press [ENTER] to continue "
     stdout.flushFile
     discard stdin.readLine
@@ -31,7 +31,6 @@ proc sendToApple*(bundleId:string, dmg:string, user:string, password:string, asc
     if asc_provider != "":
         sendArgs.add("--asc-provider")
         sendArgs.add(asc_provider)
-    echo sendArgs
     let send = execProcess("xcrun", args=sendArgs, options={poUsePath, poStdErrToStdOut})
     echo send
     var uuid = findUUID(send)

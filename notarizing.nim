@@ -10,21 +10,20 @@ const p = newParser("notarizing"):
     option("-t", "--target", help="The location of the target file (DMG when sending to Apple, DIR.app when signing). When missing the system will scan the directory tree below this point")
     option("-p", "--password", help="The location of the password file. Defaults to ~/" & PASS_CORE_LOC)
     option("-u", "--user", help="The Apple username")
-    option("-a", "--ascprovider", help="The specific asc provider for the current Apple developer account")
+    option("-a", "--ascprovider", help="The specific associated provider for the current Apple developer account")
     option("-i", "--signid", help="The sign id, as given by `security find-identity -v -p codesigning`")
 let opts = p.parse(commandLineParams())
 if opts.help: quit()
 
 let config = loadConfig(getHomeDir() & PASS_CORE_LOC)
-
 if opts.command == "sign":
     let signid = if opts.signid != "" : opts.signid else: config.getSectionValue("", "SIGN_ID")
     if signid == "": quit("No sign id provided")
-    let target = findApp(if opts.target != "": opts.target else: getCurrentDir())
+    var target = findApp(if opts.target != "": opts.target else: getCurrentDir())
+    if target == "": target = findDmg(if opts.target != "": opts.target else: getCurrentDir())
     if target == "": quit("No target file provided")
     sign(target, signid)
 elif opts.command == "send":
-    echo opts.password
     let password = if opts.password != "": opts.password else: config.getSectionValue("","APPLE_APP_PASSWORD")
     if password == "": quit("No password provided")
     let user = if opts.user != "": opts.user else: config.getSectionValue("", "USER")

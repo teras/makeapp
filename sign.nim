@@ -17,5 +17,5 @@ proc sign*(path:string, id:string) =
             if not signFile(file, id):
                 quit("Unable to sign file " & file)
     if not signFile(path, id):
-        echo "Unable to sign Application " & path
+        quit("Unable to sign Application " & path)
     echo " *** Sign successful"
