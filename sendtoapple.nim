@@ -16,19 +16,22 @@ proc findUUID(input:string) : string =
     echo "Unable to locate UUID"
     quit(96)
 
-proc sendToApple*(bundleId:string, target:string, user:string, password:string, asc_provider:string) =
-    echo "Using bundle ID: " & bundleId
-    echo "Using target: " & target
+proc sendToApple*(bundleId:string, dmg:string, user:string, password:string, asc_provider:string) =
+    echo "Bundle ID: " & bundleId
+    echo "DMG: " & dmg
+    echo "Username: " & user
+    if asc_provider!="": echo "Using ASC Provider"
     stdout.write "Press [ENTER] to continue "
     stdout.flushFile
     discard stdin.readLine
 
     echo "Sending DMG to Apple"
-    var sendArgs = @["altool", "-t", "osx", "-f", target, "--primary-bundle-id", bundleId, "--notarize-app",
+    var sendArgs = @["altool", "-t", "osx", "-f", dmg, "--primary-bundle-id", bundleId, "--notarize-app",
         "--username", user, "--password", password]
     if asc_provider != "":
         sendArgs.add("--asc-provider")
         sendArgs.add(asc_provider)
+    echo sendArgs
     let send = execProcess("xcrun", args=sendArgs, options={poUsePath, poStdErrToStdOut})
     echo send
     var uuid = findUUID(send)
@@ -47,7 +50,7 @@ proc sendToApple*(bundleId:string, target:string, user:string, password:string, 
 
         if check.contains("Package Approved"):
             echo "Stapling DMG"
-            echo execProcess("xcrun", args=["stapler", "staple", "-v", target], options={poUsePath, poStdErrToStdOut})
+            echo execProcess("xcrun", args=["stapler", "staple", "-v", dmg], options={poUsePath, poStdErrToStdOut})
             quit(0)
         
         if not check.contains("in progress"):

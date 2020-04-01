@@ -20,9 +20,8 @@ let config = loadConfig(getHomeDir() & PASS_CORE_LOC)
 if opts.command == "sign":
     let signid = if opts.signid != "" : opts.signid else: config.getSectionValue("", "SIGN_ID")
     if signid == "": quit("No sign id provided")
-    let target = if opts.target != "": opts.target else: findApp()
+    let target = findApp(if opts.target != "": opts.target else: getCurrentDir())
     if target == "": quit("No target file provided")
-    echo "Sign " & target
     sign(target, signid)
 elif opts.command == "send":
     echo opts.password
@@ -30,12 +29,12 @@ elif opts.command == "send":
     if password == "": quit("No password provided")
     let user = if opts.user != "": opts.user else: config.getSectionValue("", "USER")
     if user == "": quit("No user provided")
-    let bundleId = if opts.bundleid != "": opts.bundleid else: loadPlist(findPlist()).getOrDefault("CFBundleIdentifier").getStr()
+    let plist = findPlist(if opts.target != "": opts.target else: getCurrentDir())
+    let bundleId = if opts.bundleid != "": opts.bundleid else: loadPlist(plist).getOrDefault("CFBundleIdentifier").getStr("")
     if bundleId == "": quit("No Bundle ID provided")
-    let target = if opts.target != "": opts.target else: findDmg()
-    if target == "": quit("No target file provided")
+    let dmg = findDmg(if opts.target != "": opts.target else: getCurrentDir())
+    if dmg == "": quit("No target file provided")
     let asc_provider = if opts.ascprovider != "": opts.ascprovider else: config.getSectionValue("", "ASC_PROVIDER")
-    echo "Send " & target
-    sendToApple(bundleId, target, user, password, asc_provider)
+    sendToApple(bundleId, dmg, user, password, asc_provider)
 else:
     quit("Not recognized command, use --help to get a list of possible commands")

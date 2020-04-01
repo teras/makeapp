@@ -1,4 +1,4 @@
-import osproc, os
+import osproc, os, strutils
 
 {.compile: "fileloader.c".}
 proc needsSigning(path:cstring):bool {.importc.}
@@ -11,8 +11,9 @@ proc signFile(path:string, key:string) :bool =
     return true
 
 proc sign*(path:string, id:string) =
+    echo "Signing: " & path
     for file in walkDirRec(path):
-        if file.cstring.needsSigning:
+        if file.endsWith(".jnilib") or file.endsWith(".jnilib") or file.cstring.needsSigning:
             if not signFile(file, id):
                 quit("Unable to sign file " & file)
     if not signFile(path, id):
