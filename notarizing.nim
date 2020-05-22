@@ -6,7 +6,9 @@ const NOTARIZE_USER         = "NOTARIZE_USER"
 const NOTARIZE_ASC_PROVIDER = "NOTARIZE_ASC_PROVIDER"
 const NOTARIZE_SIGN_ID      = "NOTARIZE_SIGN_ID"
 
-const p = newParser("notarizing"):
+const VERSION {.strdefine.}: string = ""
+
+const p = newParser("notarizing " & VERSION):
     help("Notarize and sign DMG files for the Apple store, to make later versions of macOS happy. For more info check https://github.com/teras/notarizing")
     option("-k", "--keyfile", help="The location of a configuration file that keys are stored.")
     command("sign"):
@@ -45,4 +47,5 @@ const p = newParser("notarizing"):
             sendToApple(bundleId, dmg, user, password, asc_provider)
             quit()
 p.run(commandLineParams())
-quit("Please select a valid command, use the --help argument to see a list of commands")
+stdout.write(p.help)
+quit(1)
