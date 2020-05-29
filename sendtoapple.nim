@@ -16,7 +16,12 @@ proc findUUID(input:string) : string =
     echo "Unable to locate UUID"
     quit(96)
 
-proc sendToApple*(bundleId:string, fileToSend:string, user:string, password:string, asc_provider:string, shouldAsk=true) =
+proc sendToApple*(bundleId:string, fileToSend:string, user:string, password:string, asc_provider:string, shouldAsk:bool, verbose:int) =
+    proc safe(input:string):string = 
+        if verbose<=1:
+            input.replace(user, "[USER]").replace(password, "[PASSWORD]")
+        else:
+            input
     echo "Bundle ID: " & bundleId
     echo "File: " & fileToSend
     echo "Username: " & user
@@ -27,30 +32,29 @@ proc sendToApple*(bundleId:string, fileToSend:string, user:string, password:stri
         discard stdin.readLine
 
     echo "Sending DMG to Apple"
-    var sendArgs = @["altool", "-t", "osx", "-f", fileToSend, "--primary-bundle-id", bundleId, "--notarize-app",
-        "--username", user, "--password", password]
-    if asc_provider != "":
-        sendArgs.add("--asc-provider")
-        sendArgs.add(asc_provider)
-    let send = execProcess("xcrun", args=sendArgs, options={poUsePath, poStdErrToStdOut})
+    let sendcmd = "xcrun altool -t osx -f " & fileToSend.quoteShell & " --primary-bundle-id " & bundleId.quoteShell & " --notarize-app" &
+        " --username " & user.quoteShell &  " --password " & password.quoteShell & (if asc_provider != "": " --asc-provider " & asc_provider.quoteShell else:"")
+    if verbose>0: echo "▹▹ " & sendcmd.safe
+    let (send,_) = execCmdEx(sendcmd, options={poUsePath, poStdErrToStdOut})
     echo send
     var uuid = findUUID(send)
     echo "UUID: " & uuid
 
-    var checkArgs = @["altool", "--notarization-info", uuid, "-u", user, "-p", password]
-    if asc_provider != "":
-        checkArgs.add("--asc-provider")
-        checkArgs.add(asc_provider)
+    let checkcmd = "xcrun altool --notarization-info " & uuid.quoteShell & " -u " & user.quoteShell & " -p " & password.quoteShell &
+        (if asc_provider != "": " --asc-provider " & asc_provider.quoteShell else:"")
+    if verbose>0: echo "▹▹ " & checkcmd.safe
     while true:
         echo "Sleeping for ", SLEEP, "\""
         sleep SLEEP * 1000
         echo "Check status of package"
-        let check = execProcess("xcrun", args=checkArgs, options={poUsePath, poStdErrToStdOut})
+        let (check,_) = execCmdEx(checkcmd, options={poUsePath, poStdErrToStdOut})
         echo check
 
         if check.contains("Package Approved"):
             echo "Stapling DMG"
-            echo execProcess("xcrun", args=["stapler", "staple", "-v", fileToSend], options={poUsePath, poStdErrToStdOut})
+            let staplecmd = "xcrun stapler staple -v " & fileToSend.quoteShell
+            if verbose>0: echo "▹▹ " & staplecmd
+            echo execCmdEx(staplecmd, options={poUsePath, poStdErrToStdOut})
             quit(0)
         
         if not check.contains("in progress"):
