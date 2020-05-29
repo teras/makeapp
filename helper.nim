@@ -6,12 +6,17 @@ proc findPlist*(base:string) : string =
             return file
     return ""
 
-proc findDmg*(base:string) : string =
-    if base.endsWith(".dmg"): return base
+proc findFile(base:string, ext:string): string =
+    let ext = "."&ext
+    if base.endsWith(ext): return base
     for file in walkDirRec(base):
-        if file.endsWith(".dmg"):
+        if file.endsWith(ext):
             return file
     return ""
+
+
+proc findDmg*(base:string) : string = findFile(base, "dmg")
+proc findZip*(base:string) : string = findFile(base, "zip")
 
 proc findApp*(base:string) : string =
     if base.endsWith(".app"): return base
