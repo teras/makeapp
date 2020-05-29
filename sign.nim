@@ -3,6 +3,37 @@ import osproc, os, strutils, nim_miniz, sets, tempfile
 {.compile: "fileloader.c".}
 proc needsSigning(path:cstring):bool {.importc.}
 
+const DEFAULT_ENTITLEMENT = """
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+</dict>
+</plist>
+"""
+
+var entitlements_file:string = ""
+
+proc cleanup*() =
+    if entitlements_file!="": entitlements_file.removeFile
+
+proc getDefaultEntitlementFile*(): string =
+    let (file,name) = mkstemp(prefix="notr_ent_", mode=fmWrite)
+    entitlements_file = name
+    file.write(DEFAULT_ENTITLEMENT)
+    file.close
+    return name
+
 proc signFile(path:string, id:string, entitlements:string, files:var seq[string], verbose:int) :bool =
     let entitlementsCmd = if entitlements == "": "" else: " --entitlements " & entitlements.quoteShell
     let cmd = "codesign --timestamp --deep --force --verify --verbose --options runtime --sign " & id.quoteShell & entitlementsCmd & " " & path.quoteShell

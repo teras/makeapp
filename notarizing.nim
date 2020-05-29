@@ -15,7 +15,7 @@ const p = newParser("notarizing " & VERSION):
         option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
         option("-i", "--signid", help="The sign id, as given by `security find-identity -v -p codesigning`")
         option("-x", "--allowedext", multiple=true, help="Allow this file extension as an executable, along the default ones. Could be used more than once")
-        option("-e", "--entitlements", help="Use the provided file as entitlements")
+        option("-e", "--entitlements", help="Use the provided file as entitlements, defaults to a generic entitlements file")
         flag("-v", "--verbose", multiple=true, help="Be more verbose when signing files")
         run:
             let config = if opts.parentOpts.keyfile != "" and opts.parentOpts.keyfile.fileExists: loadConfig(opts.parentOpts.keyfile) else: newConfig()
@@ -24,8 +24,10 @@ const p = newParser("notarizing " & VERSION):
             var target = findApp(if opts.target != "": opts.target else: getCurrentDir())
             if target == "": target = findDmg(if opts.target != "": opts.target else: getCurrentDir())
             if target == "": quit("No target file provided")
-            if opts.entitlements != "" and not opts.entitlements.fileExists: quit("Required entitlemens file " & opts.entitlements & " does not exist")
-            sign(target, signid, opts.entitlements.absolutePath.normalizedPath, opts.allowedext.toHashSet, opts.verbose)
+            let entitlements = if opts.entitlements == "": getDefaultEntitlementFile() else: opts.entitlements.absolutePath.normalizedPath
+            if not entitlements.fileExists: quit("Required entitlemens file " & opts.entitlements & " does not exist")
+            sign(target, signid, entitlements, opts.allowedext.toHashSet, opts.verbose)
+            if opts.entitlements == "": cleanup()
             quit()
     command("send"):
         option("-t", "--target", help="The location of the DMG file. When missing the system will scan the directory tree below this point")
