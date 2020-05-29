@@ -16,14 +16,15 @@ proc findUUID(input:string) : string =
     echo "Unable to locate UUID"
     quit(96)
 
-proc sendToApple*(bundleId:string, dmg:string, user:string, password:string, asc_provider:string) =
+proc sendToApple*(bundleId:string, dmg:string, user:string, password:string, asc_provider:string, shouldAsk=true) =
     echo "Bundle ID: " & bundleId
     echo "DMG: " & dmg
     echo "Username: " & user
     if asc_provider!="": echo "Associated Provider: " & asc_provider
-    stdout.write "Press [ENTER] to continue "
-    stdout.flushFile
-    discard stdin.readLine
+    if shouldAsk:
+        stdout.write "Press [ENTER] to continue "
+        stdout.flushFile
+        discard stdin.readLine
 
     echo "Sending DMG to Apple"
     var sendArgs = @["altool", "-t", "osx", "-f", dmg, "--primary-bundle-id", bundleId, "--notarize-app",

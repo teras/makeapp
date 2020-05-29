@@ -32,6 +32,7 @@ const p = newParser("notarizing " & VERSION):
         option("-p", "--password", help="The Apple password")
         option("-u", "--user", help="The Apple username")
         option("-a", "--ascprovider", help="The specific associated provider for the current Apple developer account")
+        flag("-y", "--yes", help="When run in a script, skip asking for confirmation")
         run:
             let config = if opts.parentOpts.keyfile != "" and opts.parentOpts.keyfile.fileExists: loadConfig(opts.parentOpts.keyfile) else: newConfig()
             let password = if opts.password != "": opts.password else: getEnv(NOTARIZE_APP_PASSWORD, config.getSectionValue("",NOTARIZE_APP_PASSWORD))
@@ -44,7 +45,7 @@ const p = newParser("notarizing " & VERSION):
             let dmg = findDmg(if opts.target != "": opts.target else: getCurrentDir())
             if dmg == "": quit("No target file provided")
             let asc_provider = if opts.ascprovider != "": opts.ascprovider else: getEnv(NOTARIZE_ASC_PROVIDER, config.getSectionValue("", NOTARIZE_ASC_PROVIDER))
-            sendToApple(bundleId, dmg, user, password, asc_provider)
+            sendToApple(bundleId, dmg, user, password, asc_provider, not opts.yes)
             quit()
 p.run(commandLineParams())
 stdout.write(p.help)
