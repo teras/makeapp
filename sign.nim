@@ -5,7 +5,7 @@ proc needsSigning(path:cstring):bool {.importc.}
 
 proc signFile(path:string, id:string, entitlements:string) :bool =
     let entitlementsCmd = if entitlements == "": "" else: " --entitlements " & entitlements.quoteShell
-    if execCmd("codesign --deep --force --verify --verbose --options runtime --sign " & id.quoteShell & entitlementsCmd & " " & path.quoteShell) != 0:
+    if execCmd("codesign --timestamp --deep --force --verify --verbose --options runtime --sign " & id.quoteShell & entitlementsCmd & " " & path.quoteShell) != 0:
         return false
     if execCmd("codesign --verify --verbose " & path.quoteShell) != 0:
         return false
