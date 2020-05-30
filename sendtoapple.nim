@@ -35,7 +35,8 @@ proc sendToApple*(bundleId:string, fileToSend:string, asc_provider:string, shoul
         sleep SLEEP * 1000
         let check = myexec("Check status after sleeping for " & $SLEEP & "\"", checkcmd)
         if check.contains("Package Approved"):
-            myexec "Stapling DMG", "xcrun stapler staple -v " & fileToSend.quoteShell
+            if fileToSend.endsWith(".dmg"):
+                myexec "Stapling DMG", "xcrun stapler staple -v " & fileToSend.quoteShell
             exit()        
         elif not check.contains("in progress"):
             if VERBOCITY < 1:

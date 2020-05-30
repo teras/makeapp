@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// if we want the real thing, maybe get inspired by https://github.com/AlexDenisov/segment_dumper/blob/master/main.c
+
 int needsSigningMem(const void* memblock) {
     struct mach_header_64 * header;
     header = (struct mach_header_64 *)memblock;

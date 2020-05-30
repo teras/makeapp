@@ -28,8 +28,11 @@ typedef int       cpu_type_t;
 typedef int       cpu_subtype_t;
 
 #define FAT_MAGIC	0xcafebabe
+#define FAT_CIGAM	0xbebafeca
+
 /* Constant for the magic field of the mach_header_64 (64-bit architectures) */
 #define MH_MAGIC_64 0xfeedfacf /* the 64-bit mach magic number */
+#define MH_CIGAM_64 0xcffaedfe /* NXSwapInt(MH_MAGIC_64) */
 
 struct fat_header {
 	uint32_t	magic;		/* FAT_MAGIC */

@@ -14,7 +14,6 @@ const p = newParser("notarizing " & VERSION):
     command("sign"):
         option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
         option("-i", "--signid", help="The sign id, as given by `security find-identity -v -p codesigning`")
-        option("-x", "--allowedext", multiple=true, help="Allow this file extension as an executable, along the default ones. Could be used more than once")
         option("-e", "--entitlements", help="Use the provided file as entitlements, defaults to a generic entitlements file")
         flag("-v", "--verbose", multiple=true, help="Be more verbose when signing files. 0=quiet and only errors, 1=show output, 2=show output and command, 3=show everything including passwords")
         run:
@@ -27,7 +26,7 @@ const p = newParser("notarizing " & VERSION):
             if target == "": quit("No target file provided")
             ENTITLEMENTS = if opts.entitlements == "": getDefaultEntitlementFile() else: opts.entitlements.absolutePath.normalizedPath
             if not ENTITLEMENTS.fileExists: quit("Required entitlemens file " & opts.entitlements & " does not exist")
-            sign(target, opts.allowedext.toHashSet)
+            sign(target)
             exit()
     command("send"):
         option("-t", "--target", help="The location of the DMG file. When missing the system will scan the directory tree below this point")
