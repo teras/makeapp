@@ -1,4 +1,4 @@
-import osproc, os, strutils, nim_miniz, sets, tempfile, myexec
+import osproc, os, strutils, nim_miniz, tempfile, myexec
 
 {.compile: "fileloader.c".}
 proc needsSigning(path:cstring):bool {.importc.}

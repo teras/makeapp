@@ -8,8 +8,8 @@ const NOTARIZE_SIGN_ID      = "NOTARIZE_SIGN_ID"
 
 const VERSION {.strdefine.}: string = ""
 
-const p = newParser("notarizing " & VERSION):
-    help("Notarize and sign DMG files for the Apple store, to make later versions of macOS happy. For more info check https://github.com/teras/notarizing")
+const p = newParser("makeapp " & VERSION):
+    help("Sign, create and notarize DMG files for the Apple store, to make later versions of macOS happy. For more info check https://github.com/teras/makeapp")
     option("-k", "--keyfile", help="The location of a configuration file that keys are stored.")
     command("sign"):
         option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
