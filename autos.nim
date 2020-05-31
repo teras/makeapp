@@ -1,8 +1,10 @@
 import os
 
 var toDelete: seq[string]
+var toDelegate: seq[proc()]
 
 proc deleteLater*(file:string) = toDelete.add file
+proc delegateLater*(procedure:proc()) = toDelegate.add procedure
 
 proc deleteNow() =
     for f in toDelete:
@@ -10,6 +12,9 @@ proc deleteNow() =
             f.removeFile
         elif f.dirExists:
             f.removeDir
+    for f in toDelegate:
+        try: f()
+        except: discard
 
 proc terminate(message:string, error=true) =
     deleteNow()

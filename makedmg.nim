@@ -20,6 +20,9 @@ proc createDMGImpl(srcdmg, destdmg, app:string, sign:bool, entitlements:string)=
     # Attach destination volume
     myexecQuiet "Detach old volume if any", "hdiutil detach " & volume
     myexec "Attach volume", "hdiutil attach -noautoopen -mountpoint " & volume & " " & srcdmg.quoteShell
+    delegateLater(proc () =
+        if volume.dirExists: myexec "Detach volume", "hdiutil detach -force " & volume
+    )
     let appdest = findDestination(volume, app.extractFilename)
 
     appdest.removeDir
