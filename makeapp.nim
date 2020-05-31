@@ -62,7 +62,7 @@ const p = newParser("makeapp " & VERSION):
         option("-p", "--password", help="The Apple password")
         option("-u", "--user", help="The Apple username")
         option("-a", "--ascprovider", help="The specific associated provider for the current Apple developer account")
-        flag("-y", "--yes", help="When run in a script, skip asking for confirmation")
+        flag("-q", "--shouldask", help="When run in a script, ask for confirmation first")
         flag("-v", "--verbose", multiple=true, help="Be more verbose when signing files. 0=quiet and only errors, 1=show output, 2=show output and command, 3=show everything including passwords")
         run:
             VERBOCITY = opts.verbose
@@ -79,7 +79,7 @@ const p = newParser("makeapp " & VERSION):
             if fileToSend == "": fileToSend = findZip(ctarget)
             if fileToSend == "":kill("No target file found")
             let asc_provider = if opts.ascprovider != "": opts.ascprovider else: getEnv(NOTARIZE_ASC_PROVIDER, config.getSectionValue("", NOTARIZE_ASC_PROVIDER))
-            sendToApple(bundleId, fileToSend, asc_provider, not opts.yes)
+            sendToApple(bundleId, fileToSend, asc_provider, opts.shouldask)
             exit()
 p.run(commandLineParams())
 stdout.write(p.help)
