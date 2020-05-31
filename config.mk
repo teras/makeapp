@@ -4,3 +4,4 @@ ALLTARGETS=osx
 RUNARGS=sign
 #DEBUG=true
 COMPRESS=true
+VERSION=0.2
