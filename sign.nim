@@ -25,37 +25,37 @@ const DEFAULT_ENTITLEMENT = """
 """
 
 proc getDefaultEntitlementFile*(): string =
-    let (file,name) = mkstemp(prefix="notr_ent_", mode=fmWrite)
-    file.write(DEFAULT_ENTITLEMENT)
-    file.close
-    name.deleteLater
-    return name
+  let (file,name) = mkstemp(prefix="notr_ent_", mode=fmWrite)
+  file.write(DEFAULT_ENTITLEMENT)
+  file.close
+  name.deleteLater
+  return name
 
 proc signFile(path:string, entitlements:string) =
-    myexec "Sign " & (if path.existsDir: "app" else: "file") & " " & path.extractFilename, "codesign --timestamp --deep --force --verify --verbose --options runtime --sign " & ID.quoteShell &
-        " --entitlements " & entitlements.quoteShell & " " & path.quoteShell
-    myexec "", "codesign --verify --verbose " & path.quoteShell
+  myexec "Sign " & (if path.existsDir: "app" else: "file") & " " & path.extractFilename, "codesign --timestamp --deep --force --verify --verbose --options runtime --sign " & ID.quoteShell &
+    " --entitlements " & entitlements.quoteShell & " " & path.quoteShell
+  myexec "", "codesign --verify --verbose " & path.quoteShell
 
 proc signJarEntries(jarfile:string, entitlements:string) =
-    let tempdir = mkdtemp("notr_jar_")
-    jarfile.unzip(tempdir)
-    let signed = signImpl(tempdir, entitlements, false)
-    for file in signed:
-        myexec "", "jar -uf " & jarfile.quoteShell & " -C " & tempdir.quoteShell & " " & file
-    tempdir.removeDir
+  let tempdir = mkdtemp("notr_jar_")
+  jarfile.unzip(tempdir)
+  let signed = signImpl(tempdir, entitlements, false)
+  for file in signed:
+    myexec "", "jar -uf " & jarfile.quoteShell & " -C " & tempdir.quoteShell & " " & file
+  tempdir.removeDir
 
 proc signImpl(path:string, entitlements:string, rootSign:bool): seq[string] =
-    template full(cfile:string):string = joinPath(path, cfile)
-    for file in walkDirRec(path, relative = true):
-        if file.endsWith(".cstemp"):
-            file.full.removeFile
-        elif file.endsWith(".jnilib") or file.endsWith(".dylib") or file.full.cstring.needsSigning:
-            signFile(file.full, entitlements)
-            if not rootSign: result.add file
-        elif file.endsWith(".jar"):
-            signJarEntries(file.full, entitlements)
-            if not rootSign: result.add file
-    if rootSign:
-        signFile(path, entitlements)
+  template full(cfile:string):string = joinPath(path, cfile)
+  for file in walkDirRec(path, relative = true):
+    if file.endsWith(".cstemp"):
+      file.full.removeFile
+    elif file.endsWith(".jnilib") or file.endsWith(".dylib") or file.full.cstring.needsSigning:
+      signFile(file.full, entitlements)
+      if not rootSign: result.add file
+    elif file.endsWith(".jar"):
+      signJarEntries(file.full, entitlements)
+      if not rootSign: result.add file
+  if rootSign:
+    signFile(path, entitlements)
 
 proc sign*(path:string, entitlements:string): seq[string] {.discardable.} = signImpl(path, entitlements, true)
