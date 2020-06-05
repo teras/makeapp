@@ -31,7 +31,7 @@ template javaOpt() =
   option("--vendor", help="The vendor of the package")
   option("--url", help="Product URL")
   option("--jdk", help="The location of the JDK")
-  option("--os", help="Comma separated list of possible operating system targets (defaults to current): " & typesList())
+  option("--os", help="Comma separated list of possible operating system targets (defaults to \"system\", which is current system package): " & typesList())
 template javaImp() =
   let username = findUsername() # Used in current context only
   let

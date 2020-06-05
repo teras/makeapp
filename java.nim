@@ -33,32 +33,36 @@ proc resource*(resourcedir:string, resource:string):string =
 
 proc findOS*(list:string):seq[OSType] =
   var os:seq[OSType]
+  let list = if list=="": "system" else: list
   for part in list.split(','):
-    var added = false
-    for otype in OSType:
-      if part.strip.toLowerAscii == $otype :
-        os.add(otype)
-        added = true
-        break
-    if not added and part != "":
-      kill "Unkown package type " & part.strip
-  if os.len == 0:
-    when system.hostOS == "macosx":
-      os.add pMacos
-    elif system.hostOS == "linux":
-      if system.hostCPU == "amd64":
-        os.add pLinux64
-      elif system.hostCPU == "i386":
-        os.add pLinux32
+    if part == "system":
+      when system.hostOS == "macosx":
+        os.add pMacos
+      elif system.hostOS == "linux":
+        if system.hostCPU == "amd64":
+          os.add pLinux64
+        elif system.hostCPU == "i386":
+          os.add pLinux32
+        else:
+          kill "Unsupported Linux CPU type"
+      elif system.hostOS == "windows":
+        if system.hostCPU == "amd64":
+          os.add pWin64
+        else:
+          os.add pWin32
       else:
-        kill "Unsupported Linux CPU type"
-    elif system.hostOS == "windows":
-      if system.hostCPU == "amd64":
-        os.add pWin64
-      else:
-        os.add pWin32
+        kill "Unsupported operating system"
     else:
-      kill "Unsupported operating system"
+      var added = false
+      for otype in OSType:
+        if part.strip.toLowerAscii == $otype :
+          os.add(otype)
+          added = true
+          break
+      if not added and part != "":
+        kill "Unkown package type " & part.strip
+  if os.len == 0:
+    kill "No destination opperatin system requested"
   return os.deduplicate
 
 template idx(params:seq[string], idx:int):string =
