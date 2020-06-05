@@ -17,41 +17,39 @@ template verboseImp() =
   VERBOCITY = opts.verbose
 
 template javaOpt() =
-  option("--os", help="Comma separated list of possible operating system targets: " & OSType.mapIt($it).join(", "))
-  option("--res", help="The location of the resources files, that are static for all pachages, e.g. icons.")
   option("--name", help="The name of the application")
   option("--applib", help="The directory where the application itself is stored")
   option("--jar", help="The desired entry JAR")
+  option("--res", help="The location of the resources files, needed when the application is built.")
+  option("--extra", help="The location of extra files to added to the bundle. This is a hierarchical folder, where first level has the name of the target (as defined by system target) or special keywords \"windows\" for all Windows targets and \"common\" for all targets. Second level are all files that will be merged with the files located at applib.")
   option("--modules", help="Comma separated list of required modules. Defaults to \"java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets\"")
   option("--jvmopt", multiple=true, help="JVM option. Could be used more than once. If DEFAULTS are given, then the options \"-Dawt.useSystemAAFontSettings=on\" and \"-Dswing.aatext=true\" are added")
   option("--id", help="Reverse URL unique identifier")
   option("--descr", help="Application description")
-  option("--assoc", multiple=true, help="File associations with this application. Format is EXT:DESCRIPTION:MIMETYPE:ICONNAME. Only the EXT part is required. All other parts could be missing. For example \"ass:ASS Subtitle file:text/x-ssa:subtitle\"")
-  option("--icon", help="The application icon name resource")
-  option("--splash", help="The application splash resource")
+  option("--assoc", multiple=true, help="File associations with this application. Format is EXT:MIMETYPE:DESCRIPTION. Only the EXT part is required. All other parts could be missing. To provide a custom icon, under resource folder use an file named as \"EXT.icns\". Usage example: \"ass:text/x-ssa:ASS Subtitle file\"")
   option("--version", help="The version of the application")
   option("--vendor", help="The vendor of the package")
   option("--url", help="Product URL")
   option("--jdk", help="The location of the JDK")
+  option("--os", help="Comma separated list of possible operating system targets (defaults to current): " & typesList())
 template javaImp() =
+  let username = findUsername() # Used in current context only
   let
-    username {.inject.} = findUsername()
-    os {.inject.} = findOS(opts.os)
-    res {.inject.} = if opts.res == "": "" else: checkParam(opts.res, "Unable to locate directory " & opts.res, asDir=true)
     name {.inject.} = checkParam(opts.name.strip, "No application name provided")
     applib {.inject.} = checkParam(opts.applib, "No application directory provided", asDir=true).absolutePath.normalizedPath
     jar {.inject.} = getJar(opts.jar, applib)
+    res {.inject.} = if opts.res == "": "" else: checkParam(opts.res, "Unable to locate directory " & opts.res, asDir=true)
+    extra {.inject.} = opts.extra
     modules {.inject.} = if opts.modules == "" : "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets" else: opts.modules
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
     id {.inject.} = if opts.id == "": constructId(username, name) else: opts.id
     descr {.inject.} = if opts.descr == "" : opts.name else: opts.descr
-    assoc {.inject.} = findAccociations(opts.assoc)
-    icon {.inject.} = opts.icon
-    splash {.inject.} = opts.splash
+    assoc {.inject.} = findAccociations(opts.assoc, res)
     version {.inject.} = if opts.version == "" : "1.0" else: opts.version
     vendor {.inject.} = if opts.vendor == "": username.capitalizeAscii else: opts.vendor
     url {.inject.} = opts.url
     jdk {.inject.} = opts.jdk
+    os {.inject.} = findOS(opts.os)
 
 template signOpt() =
   option("--signid", help="The sign id, as given by `security find-identity -v -p codesigning`")
@@ -62,12 +60,6 @@ template signImp(sign:bool, keyfile:string) =
     ID = checkParam(if opts.signid != "" : opts.signid else: getEnv(NOTARIZE_SIGN_ID, config.getSectionValue("", NOTARIZE_SIGN_ID)), "No sign id provided")
   let entitle {.inject.} = if not sign: "" else: checkParam(if opts.entitle == "": getDefaultEntitlementFile() else: opts.entitle.absolutePath.normalizedPath, "Required entitlements file " & opts.entitle & " does not exist")
 
-template createOpt() =
-  option("--dmg", help="The location of the DMG template")
-  signOpt()
-template createImp(sign:bool, keyfile:string) =
-  signImp(sign, keyfile)
-  let dmg {.inject.} = checkParam(opts.dmg, "No DMG template found", asFile=true)
 
 template sendOpt() =
   option("--password", help="The Apple password")
@@ -89,26 +81,33 @@ const p = newParser("makeapp " & VERSION):
   option("-k", "--keyfile", help="The location of a configuration file that keys are stored.")
   command("help"):
     run:
-      echo "Some help info"
+      echo """
+Default resources:
+  macOS specific: 
+    app.icns         : The application icon
+    dmg_template.zip : The application DMG template
+    [ASSOC].icns       : The file association icons for file extensions ASSOC. E.g. for an association of ".txt" files, the filename should be "txt.icns"
+      """
       exit(true)
   command("create"):
     commonOutOpt()
     javaOpt()
-    createOpt()
     option("--notarize", help="Notarize DMG application after creation, boolean value. Defaults to false")
+    signOpt()
     sendOpt()
     verboseOpt()
     run:
       commonOutImp()
       javaImp()
-      createImp(true, opts.parentOpts.keyfile)
+      signImp(true, opts.parentOpts.keyfile)
       let notarize = opts.notarize.isTrue
       sendImp(notarize)
       verboseImp()
-      safedo: makeJava(os, output, res, name, version, applib, jar, modules, jvmopts, assoc, icon, splash, vendor, descr, id, url, jdk)
+      safedo: makeJava(os, output, res, name, version, applib, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
       let appOut = output / name & ".app"
+      let dmgIn = checkParam(res.resource("dmg_template.zip"), "No " & res / "dmg_template.zip DMG template found")
       let dmgOut = output / name & "-" & version & ".dmg"
-      safedo: createDMG(dmg, dmgOut, appOut, true, entitle)
+      safedo: createDMG(dmgIn, dmgOut, appOut, true, entitle)
       if notarize:
         safedo: sendToApple(id, dmgOut, ascprovider)
       exit()
@@ -120,18 +119,20 @@ const p = newParser("makeapp " & VERSION):
       commonOutImp()
       javaImp()
       verboseImp()
-      safedo: makeJava(os, output, res, name, version, applib, jar, modules, jvmopts, assoc, icon, splash, vendor, descr, id, url, jdk)
+      safedo: makeJava(os, output, res, name, version, applib, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
       exit()
   command("dmg"):
     commonOutOpt()
-    createOpt()
+    signOpt()
+    option("--dmg", help="The location of the DMG template")
     option("--target", help="The location of the target file (Application.app). When missing the system will scan the directory tree below this point")
     flag("--nosign", help="Skp sign procedure")
     verboseOpt()
     run:
       commonOutImp(false)
+      let dmg {.inject.} = checkParam(opts.dmg, "No DMG template found", asFile=true)
       let sign = not opts.nosign
-      createImp(sign, opts.parentOpts.keyfile)
+      signImp(sign, opts.parentOpts.keyfile)
       verboseImp()
       safedo: createDMG(dmg, output, opts.target, sign, entitle)
       exit()

@@ -42,3 +42,14 @@ proc checkParam*(param:string, error:string, asFile=false, asDir=false): string 
   if asFile and not param.fileExists: kill "Unable to locate file " & param.absolutePath
   if asDir and not param.dirExists: kill "Unable to locate directory " & param.absolutePath
   return param
+
+proc merge*(basedir:string, otherdir:string) =
+  for file in otherdir.walkDirRec(relative=true, yieldFilter={pcFile, pcDir}):
+    let src = otherdir / file
+    let dest = basedir / file
+    if src.dirExists:
+      dest.createDir
+    elif src.fileExists:
+      copyFileWithPermissions src, dest
+    else:
+      kill("Unknown file at " & src)

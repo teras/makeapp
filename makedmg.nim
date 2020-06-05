@@ -22,19 +22,10 @@ proc createDMGImpl(srcdmg, output_file, app:string, sign:bool, entitlements:stri
     if volume.dirExists: myexec "Detach volume", "hdiutil", "detach", "-force", volume
   )
   let appdest = findDestination(volume, app.extractFilename)
-
   appdest.removeDir
   appdest.createDir
   info "Copy files"
-  for file in app.walkDirRec(relative=true, yieldFilter={pcFile, pcDir}):
-    let src = app / file
-    let dest = appdest / file
-    if src.dirExists:
-      dest.createDir
-    elif src.fileExists:
-      copyFileWithPermissions src, dest
-    else:
-      kill("Unknown file at " & src)
+  merge appdest, app
   if sign:
     sign(appdest, entitlements)
   myexec "Detach volume", "hdiutil", "detach", "-force", volume

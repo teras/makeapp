@@ -16,7 +16,6 @@ proc findUUID(input:string) : string =
 proc sendToApple*(bundleId:string, fileToSend:string, asc_provider:string) =
   info "Bundle ID: " & bundleId
   info "File: " & fileToSend
-  if asc_provider!="": info "Associated Provider: " & asc_provider
   if not fileToSend.endsWith(".dmg") and not fileToSend.endsWith(".zip"): kill "Only .dmg and .zip files supported for notarizing, given " & fileToSend
 
   var args = @["xcrun", "altool", "-t", "osx", "-f", fileToSend, "--primary-bundle-id", bundleId, "--notarize-app", "--username", USER, "--password", PASSWORD]
