@@ -13,30 +13,30 @@ proc findUUID(input:string) : string =
         return cline.substr(1).strip
   kill "Unable to locate UUID"
 
-proc sendToApple*(bundleId:string, fileToSend:string, asc_provider:string, shouldAsk:bool) =
-  echo "Bundle ID: " & bundleId
-  echo "File: " & fileToSend
-  if asc_provider!="": echo "Associated Provider: " & asc_provider
-  if shouldAsk:
-    stdout.write "Press [ENTER] to continue "
-    stdout.flushFile
-    discard stdin.readLine
+proc sendToApple*(bundleId:string, fileToSend:string, asc_provider:string) =
+  info "Bundle ID: " & bundleId
+  info "File: " & fileToSend
+  if asc_provider!="": info "Associated Provider: " & asc_provider
+  if not fileToSend.endsWith(".dmg") and not fileToSend.endsWith(".zip"): kill "Only .dmg and .zip files supported for notarizing, given " & fileToSend
 
-  let send = myexec("Send to Apple", "xcrun altool -t osx -f " & fileToSend.quoteShell & " --primary-bundle-id " &
-    bundleId.quoteShell & " --notarize-app" &
-    " --username " & USER.quoteShell &  " --password " & PASSWORD.quoteShell &
-    (if asc_provider != "": " --asc-provider " & asc_provider.quoteShell else:"") )
+  var args = @["xcrun", "altool", "-t", "osx", "-f", fileToSend, "--primary-bundle-id", bundleId, "--notarize-app", "--username", USER, "--password", PASSWORD]
+  if asc_provider != "":
+    args.add("--asc-provider")
+    args.add(asc_provider)
+  let send = myexec("Send to Apple", args)
   var uuid = findUUID(send)
-  echo "UUID: " & uuid
+  info "UUID: " & uuid
 
-  let checkcmd = "xcrun altool --notarization-info " & uuid.quoteShell & " -u " & USER.quoteShell & " -p " & PASSWORD.quoteShell &
-    (if asc_provider != "": " --asc-provider " & asc_provider.quoteShell else:"")
+  var checkcmd = @["xcrun", "altool", "--notarization-info", uuid, "-u", USER, "-p", PASSWORD]
+  if asc_provider != "":
+    checkcmd.add("--asc-provider")
+    checkcmd.add(asc_provider)
   while true:
     sleep SLEEP * 1000
     let check = myexec("Check status after sleeping for " & $SLEEP & "\"", checkcmd)
     if check.contains("Package Approved"):
       if fileToSend.endsWith(".dmg"):
-        myexec "Stapling DMG", "xcrun stapler staple -v " & fileToSend.quoteShell
+        myexec "Stapling DMG", "xcrun", "stapler", "staple", "-v", fileToSend
       exit()
     elif not check.contains("in progress"):
       if VERBOCITY < 1:

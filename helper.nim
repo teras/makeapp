@@ -1,4 +1,4 @@
-import os, strutils
+import os, strutils, posix, autos
 
 proc findPlist*(base:string) : string =
   for file in walkDirRec(base):
@@ -25,3 +25,20 @@ proc findApp*(base:string) : string =
     if file.endsWith(".app"):
       return file
   return ""
+
+proc findUsername*(): string =
+  let userC = getlogin()
+  let len = userC.high+1
+  result = newString(len)
+  copyMem(addr(result[0]), userC, len)
+
+proc isTrue*(val:string): bool =
+  let val = val.strip.toLowerAscii
+  return val == "1" or val.startsWith("t") or val.startsWith("y")
+
+proc checkParam*(param:string, error:string, asFile=false, asDir=false): string {.discardable.}=
+  let param=param.strip
+  if param == "": kill error
+  if asFile and not param.fileExists: kill "Unable to locate file " & param.absolutePath
+  if asDir and not param.dirExists: kill "Unable to locate directory " & param.absolutePath
+  return param
