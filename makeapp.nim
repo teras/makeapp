@@ -1,5 +1,5 @@
-import parsecfg, plists, argparse, sets, strutils, sequtils
-import sendtoapple, sign, helper, myexec, makedmg, autos, java
+import parsecfg, plists, argparse, sets, strutils, sequtils, types
+import sendtoapple, sign, helper, myexec, package, autos, java
 
 const NOTARIZE_APP_PASSWORD = "NOTARIZE_APP_PASSWORD"
 const NOTARIZE_USER         = "NOTARIZE_USER"
@@ -16,12 +16,27 @@ template keyfileOpt() = option("--keyfile", help="The location of a configuratio
 template keyfileImp() =
   let keyfile {.inject.} = opts.keyfile
 
+template ostypeOpt() = option("--os", help="Comma separated list of possible operating system targets (defaults to \"system\", which is current system package): " & typesList())
+template ostypeImp() =
+ let os {.inject.} = findOS(opts.os)
+
 template verboseOpt() = flag("-v", "--verbose", multiple=true, help="Be more verbose when signing files. 0=quiet and only errors, 1=show output, 2=show output and command, 3=show everything including passwords")
 template verboseImp() =
   VERBOCITY = opts.verbose
 
-template javaOpt() =
+template infoOpt() =
   option("--name", help="The name of the application")
+  option("--version", help="The version of the application")
+  option("--descr", help="Application description")
+  option("--url", help="Product URL")
+template infoImp() =
+  let
+    name {.inject.} = checkParam(opts.name.strip, "No application name provided")
+    version {.inject.} = if opts.version == "" : "1.0" else: opts.version
+    descr {.inject.} = if opts.descr == "" : opts.name else: opts.descr
+    url {.inject.} = opts.url
+
+template javaOpt() =
   option("--appdir", help="The directory where the application itself is stored")
   option("--jar", help="The desired entry JAR")
   option("--res", help="The location of the resources files, needed when the application is built.")
@@ -29,17 +44,12 @@ template javaOpt() =
   option("--modules", help="Comma separated list of required modules. Defaults to \"java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets\"")
   option("--jvmopt", multiple=true, help="JVM option. Could be used more than once. If DEFAULTS are given, then the options \"-Dawt.useSystemAAFontSettings=on\" and \"-Dswing.aatext=true\" are added")
   option("--id", help="Reverse URL unique identifier")
-  option("--descr", help="Application description")
   option("--assoc", multiple=true, help="File associations with this application. Format is EXT:MIMETYPE:DESCRIPTION. Only the EXT part is required. All other parts could be missing. To provide a custom icon, under resource folder use an file named as \"EXT.icns\". Usage example: \"ass:text/x-ssa:ASS Subtitle file\"")
-  option("--version", help="The version of the application")
   option("--vendor", help="The vendor of the package")
-  option("--url", help="Product URL")
   option("--jdk", help="The location of the JDK")
-  option("--os", help="Comma separated list of possible operating system targets (defaults to \"system\", which is current system package): " & typesList())
-template javaImp() =
+template javaImp(name:string) =
   let username = findUsername() # Used in current context only
   let
-    name {.inject.} = checkParam(opts.name.strip, "No application name provided")
     appdir {.inject.} = checkParam(opts.appdir, "No application directory provided", asDir=true).absolutePath.normalizedPath
     jar {.inject.} = getJar(opts.jar, appdir)
     res {.inject.} = if opts.res == "": "" else: checkParam(opts.res, "Unable to locate directory " & opts.res, asDir=true)
@@ -47,13 +57,9 @@ template javaImp() =
     modules {.inject.} = if opts.modules == "" : "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets" else: opts.modules
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
     id {.inject.} = if opts.id == "": constructId(username, name) else: opts.id
-    descr {.inject.} = if opts.descr == "" : opts.name else: opts.descr
     assoc {.inject.} = findAccociations(opts.assoc, res)
-    version {.inject.} = if opts.version == "" : "1.0" else: opts.version
     vendor {.inject.} = if opts.vendor == "": username.capitalizeAscii else: opts.vendor
-    url {.inject.} = opts.url
     jdk {.inject.} = opts.jdk
-    os {.inject.} = findOS(opts.os)
 
 template signOpt() =
   option("--signid", help="The sign id, as given by `security find-identity -v -p codesigning`")
@@ -96,69 +102,80 @@ Default resources:
       exit(true)
   command("create"):
     commonOutOpt()
+    infoOpt()
     javaOpt()
     option("--notarize", help="Notarize DMG application after creation, boolean value. Defaults to false")
     signOpt()
     sendOpt()
     keyfileOpt()
+    ostypeOpt()
     verboseOpt()
     run:
       commonOutImp()
-      javaImp()
+      infoImp()
+      javaImp(name)
       keyfileImp()
       signImp(true, keyfile)
       let notarize = opts.notarize.isTrue
       sendImp(notarize)
+      ostypeImp()
       verboseImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
       exit()
       let appOut = output / name & ".app"
       let dmgIn = checkParam(res.resource("dmg_template.zip"), "No " & res / "dmg_template.zip DMG template found")
       let dmgOut = output / name & "-" & version & ".dmg"
-      safedo: createPack(dmgIn, dmgOut, appOut, true, entitle)
+      safedo: createPack(os, dmgIn, dmgOut, appOut, true, entitle, name, version, descr, url)
       if notarize:
         safedo: sendToApple(id, dmgOut, ascprovider)
       exit()
   command("java"):
     commonOutOpt()
+    infoOpt()
     javaOpt()
+    ostypeOpt()
     verboseOpt()
     run:
       commonOutImp()
-      javaImp()
+      infoImp()
+      javaImp(name)
+      ostypeImp()
       verboseImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
       exit()
   command("pack"):
     commonOutOpt()
+    infoOpt()
     signOpt()
     option("--templ", help="The location of the template (e.g. DMG under macOS, Inno setup under Windows)")
     option("--target", help="The location of the application. When missing the system will try to scan the directory tree below this point")
     flag("--nosign", help="Skp sign procedure")
     keyfileOpt()
+    ostypeOpt()
     verboseOpt()
     run:
       commonOutImp(false)
+      infoImp()
       keyfileImp()
       let templ = checkParam(opts.templ, "No template found", asFile=true)
       let sign = not opts.nosign
       signImp(sign, keyfile)
+      ostypeImp()
       verboseImp()
-      safedo: createPack(templ, output, opts.target, sign, entitle)
+      safedo: createPack(os, templ, output, opts.target, sign, entitle, name, version, descr, url)
       exit()
   command("sign"):
     option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
     signOpt()
     keyfileOpt()
+    ostypeOpt()
     verboseOpt()
     run:
       keyfileImp()
       signImp(true, keyfile)
+      ostypeImp()
       verboseImp()
-      var target = findApp(if opts.target != "": opts.target else: getCurrentDir())
-      if target == "": target = findDmg(if opts.target != "": opts.target else: getCurrentDir())
-      if target == "": kill("No target file provided")
-      safedo: sign(target, entitle)
+      safedo: sign(os, opts.target, entitle)
       exit()
   when system.hostOS == "macosx":
     command("notarize"):

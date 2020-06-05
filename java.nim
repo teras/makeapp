@@ -1,21 +1,4 @@
-import strutils, sequtils, os, autos, myexec, helper
-
-type OSType* = enum
-  pMacos, pLinux32, pLinux64, pWin32, pWin64
-
-type Assoc* = object
-  extension*: string
-  description*: string
-  mime*: string
-
-proc `$`*(ostype:OSType):string = system.`$`(ostype).substr(1).toLowerAscii
-
-proc typesList*():string = OSType.mapIt($it).join(", ")
-
-proc icon(ostype:OSType, filename:string):string = return case ostype:
-  of pMacos: filename & ".icns"
-  of pWin32, pWin64: filename & ".ico"
-  of pLinux32, pLinux64: filename & ".png"
+import strutils, sequtils, os, autos, myexec, helper, types
 
 proc resource*(resourcedir:string, resource:string):string =
   let path = if resourcedir == "": resource else: resourcedir / resource
@@ -105,12 +88,12 @@ proc constructId*(username:string, name:string): string = "app." & username.toLo
 
 proc makeWindows(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string, bits32:bool):string =
-  let arch = if bits32:"32" else:"64"
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string, ostype:OSType):string =
+  let bits = ostype.bits
   let exec = name & ".exe"
-  let cpu = if bits32: "i386" else: "amd64"
-  let strip = if bits32: "i686-w64-mingw32-strip" else: "x86_64-w64-mingw32-strip"
-  let dest = output / name & ".w" & arch
+  let cpu = if bits==32: "i386" else: "amd64"
+  let strip = if bits==32: "i686-w64-mingw32-strip" else: "x86_64-w64-mingw32-strip"
+  let dest = output / name & "." & ostype.appx
   merge dest, appdir
   let longversion = "1.0.0.0"
   let execOut = randomDir()
@@ -122,35 +105,15 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
       (if icon=="":"" else: " -d:ICON=target/appicon.ico") &
       " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\""
   copyFile(execOut / exec, dest / exec)
-  myexec "Extract JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdk", "wine" & arch,
-    "/java/win" & arch & "/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/jre", "--no-header-files",
+  myexec "Extract JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdk", "wine" & $bits,
+    "/java/win" & $bits & "/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/jre", "--no-header-files",
     "--no-man-pages", "--compress=1"
   return dest
 
 proc makeLinux(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string, arch:string):string =
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string, ostype:OSType):string =
   discard
-
-proc makeWin32(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
-    modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string):string =
-  makeWindows(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, jdkhome, identifier, url, true)
-  
-proc makeWin64(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
-    modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string):string =
-  makeWindows(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, jdkhome, identifier, url, false)
-
-proc makeLinux32(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
-    modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string):string =
-  makeLinux(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, jdkhome, identifier, url, "32")
-  
-proc makeLinux64(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
-    modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string):string =
-  makeLinux(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, jdkhome, identifier, url, "64")
 
 proc makeMacos(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
@@ -177,7 +140,7 @@ proc makeMacos(output:string, resources:string, name:string, version:string, app
     args.add "--icon"
     args.add icon
   myexec "Use jpackage to create Java package", args
-  let app = output / name & ".app"
+  let app = output / name & "." & pMacos.appx
   (app & "/Contents/runtime/Contents/MacOS").removeDir(true)
   return app & "/Contents/app"
 
@@ -205,8 +168,6 @@ proc makeJava*(os:seq[OSType], output:string, resources:string, name:string, ver
     let icon = resources.resource(cos.icon("app"))
     let appout = case cos:
       of pMacos: makeMacos(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
-      of pWin32: makeWin32(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
-      of pWin64: makeWin64(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
-      of pLinux32: makeLinux32(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
-      of pLinux64: makeLinux64(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
+      of pWin32, pWin64: makeWindows(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
+      of pLinux32, pLinux64: makeLinux(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
     if extra != "": copyExtraFiles(appout, extra, cos)

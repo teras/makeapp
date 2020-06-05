@@ -1,4 +1,4 @@
-import os, strutils, nim_miniz, myexec, autos
+import os, strutils, nim_miniz, myexec, autos, helper, types
 
 {.compile: "fileloader.c".}
 proc needsSigning(path:cstring):bool {.importc.}
@@ -52,4 +52,11 @@ proc signImpl(path:string, entitlements:string, rootSign:bool): seq[string] =
   if rootSign:
     signFile(path, entitlements)
 
-proc sign*(path:string, entitlements:string): seq[string] {.discardable.} = signImpl(path, entitlements, true)
+proc sign(path:string, entitlements:string) = discard signImpl(path, entitlements, true)
+
+proc sign*(os:seq[OSType], target:string, entitlements:string) =
+  for cos in os:
+    var dest = cos.findApp(if target != "": target else: getCurrentDir())
+    if dest == "": dest = findDmg(if dest != "": dest else: getCurrentDir())
+    if dest == "": kill("No target file provided")
+    safedo: sign(target, entitlements)
