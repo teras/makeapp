@@ -33,7 +33,7 @@ proc createDMGImpl(srcdmg, output_file, app:string, sign:bool, entitlements:stri
   if sign:
     sign(output_file, entitlements)
 
-proc createDMG*(dmg_template, output_file, app:string, sign:bool, entitlements:string) =
+proc createPack*(dmg_template, output_file, app:string, sign:bool, entitlements:string) =
   let app = checkParam(findApp(if app != "": app else: getCurrentDir()), "No [Application].app found under " & (if app != "": app else: getCurrentDir()))
   let output_file = if output_file == "":
       let fname = app.extractFilename

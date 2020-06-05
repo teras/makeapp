@@ -1,4 +1,9 @@
-import os, tempfile
+import os
+import tempfile
+
+when defined(macosx):  # required by tempfile to be friendly with docker
+  putEnv "TMP", "/tmp/makeapp"
+  "/tmp/makeapp".createDir
 
 var toDelete: seq[string]
 var toDelegate: seq[proc()]
@@ -21,14 +26,14 @@ proc deleteNow() =
     except: discard
 
 proc randomFile*(content=""): string =
-  var (file,name) = mkstemp("makeapp_f_", mode=if content=="": fmRead else:fmWrite)
+  var (file,name) = mkstemp("f_", mode=if content=="": fmRead else:fmWrite)
   name.deleteLater
   if content != "": file.write content
   file.close
   return name
 
 proc randomDir*():string =
-  result = mkdtemp("makeapp_d_")
+  result = mkdtemp("d_")
   result.deleteLater
 
 proc terminate(message:string, error=true, quiet:bool) =

@@ -44,6 +44,7 @@ proc checkParam*(param:string, error:string, asFile=false, asDir=false): string 
   return param
 
 proc merge*(basedir:string, otherdir:string) =
+  basedir.createDir
   for file in otherdir.walkDirRec(relative=true, yieldFilter={pcFile, pcDir}):
     let src = otherdir / file
     let dest = basedir / file
