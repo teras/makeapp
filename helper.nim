@@ -1,5 +1,9 @@
 import os, strutils, posix, autos, types
 
+proc resource*(resourcedir:string, resource:string):string =
+  let path = if resourcedir == "": resource else: resourcedir / resource
+  return if path.fileExists: path else: ""
+
 proc findPlist*(base:string) : string =
   for file in walkDirRec(base):
     if lastPathPart(file) == "Info.plist" and lastPathPart(file.parentDir) == "Contents":

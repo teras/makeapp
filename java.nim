@@ -1,9 +1,5 @@
 import strutils, sequtils, os, autos, myexec, helper, types
 
-proc resource*(resourcedir:string, resource:string):string =
-  let path = if resourcedir == "": resource else: resourcedir / resource
-  return if path.fileExists: path else: ""
-
 proc getAssocDef(resources:string, ostype:OSType, assoc:Assoc): string =
   var res:string
   proc addIf(label:string, value:string) =

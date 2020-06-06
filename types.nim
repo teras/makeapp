@@ -24,6 +24,13 @@ proc appx*(ostype:OSType):string = return case ostype:
   of pLinux32: "l32"
   of pLinux64: "l64"
 
+proc packx*(ostype:OSType):string = return case ostype:
+  of pMacos: "dmg"
+  of pWin64: "x64.exe"
+  of pWin32: "x32.exe"
+  of pLinux32: "i686.appimage"
+  of pLinux64: "x86_64.appimage"
+
 proc bits*(ostype:OSType):int = return case ostype:
   of pMacos,pWin64, pLinux64: 64
   else: 32
