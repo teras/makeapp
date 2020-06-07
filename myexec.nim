@@ -3,6 +3,7 @@ import strutils, osproc, autos
 var USER*:string
 var PASSWORD*:string
 var ID*:string
+var P12PASS*:string
 
 proc convert(cmd:varargs[string]):string =
   var first = true
@@ -13,7 +14,7 @@ proc convert(cmd:varargs[string]):string =
 
 proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool):string =
   let cmd = cmd.convert
-  proc printCmd() = echo "▹▹ " & (if VERBOCITY>=3: cmd else: cmd.replace(ID, "[ID]")).replace(USER, "[USER]").replace(PASSWORD, "[PASSWORD]") # no call to 'info', so that command will be displayed even on error
+  proc printCmd() = echo "▹▹ " & (if VERBOCITY>=3: cmd else: cmd.replace(ID, "[ID]")).replace(USER, "[USER]").replace(PASSWORD, "[PASSWORD]".replace(P12PASS, "[P12PASS]")) # no call to 'info', so that command will be displayed even on error
   if reason != "": info reason
   if VERBOCITY>=2: printCmd()
   var (txt,res) = execCmdEx(cmd, options={poUsePath, poStdErrToStdOut})

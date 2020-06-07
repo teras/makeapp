@@ -3,7 +3,7 @@ import os, strutils, nim_miniz, myexec, autos, helper, types
 {.compile: "fileloader.c".}
 proc needsSigning(path:cstring):bool {.importc.}
 
-proc signImpl(path:string, entitlements:string, rootSign:bool): seq[string]
+proc signMacOSImpl(path:string, entitlements:string, rootSign:bool): seq[string]
 
 const DEFAULT_ENTITLEMENT = """
 <?xml version="1.0" encoding="UTF-8"?>
@@ -31,14 +31,14 @@ proc signFile(path:string, entitlements:string) =
     "codesign", "--timestamp", "--deep", "--force", "--verify", "--verbose", "--options", "runtime", "--sign", ID, "--entitlements", entitlements, path
   myexec "", "codesign", "--verify", "--verbose", path
 
-proc signJarEntries(jarfile:string, entitlements:string) =
+proc signMacOSJarEntries(jarfile:string, entitlements:string) =
   let tempdir = randomDir()
   jarfile.unzip(tempdir)
-  let signed = signImpl(tempdir, entitlements, false)
+  let signed = signMacOSImpl(tempdir, entitlements, false)
   for file in signed:
     myexec "", "jar", "-uf", jarfile, "-C", tempdir, file
 
-proc signImpl(path:string, entitlements:string, rootSign:bool): seq[string] =
+proc signMacOSImpl(path:string, entitlements:string, rootSign:bool): seq[string] =
   template full(cfile:string):string = joinPath(path, cfile)
   for file in walkDirRec(path, relative = true):
     if file.endsWith(".cstemp"):
@@ -47,16 +47,29 @@ proc signImpl(path:string, entitlements:string, rootSign:bool): seq[string] =
       signFile(file.full, entitlements)
       if not rootSign: result.add file
     elif file.endsWith(".jar"):
-      signJarEntries(file.full, entitlements)
+      signMacOSJarEntries(file.full, entitlements)
       if not rootSign: result.add file
   if rootSign:
     signFile(path, entitlements)
 
-proc sign(path:string, entitlements:string) = discard signImpl(path, entitlements, true)
+proc signMacOS(path:string, entitlements:string) = discard signMacOSImpl(path, entitlements, true)
 
-proc sign*(os:seq[OSType], target:string, entitlements:string) =
+proc signWindows(os:OSType, target,p12file,name,url:string) =
+  let unsigned = (if target.endsWith(".exe"): target.substr(0,target.len-5) else:target) & ".unsigned.exe"
+  moveFile target, unsigned
+  myexec "Sign installer", "osslsigncode","sign", "-pkcs12", p12file, "-pass", P12PASS, 
+    "-n", name & " Installer", "-i", url, "-in", unsigned, "-out", target
+  myexec "", "osslsigncode", "verify", target
+  unsigned.removeFile
+
+proc sign*(os:seq[OSType], target, entitlements, p12file, name, url:string) =
   for cos in os:
-    var dest = cos.findApp(if target != "": target else: getCurrentDir())
-    if dest == "": dest = findDmg(if dest != "": dest else: getCurrentDir())
-    if dest == "": kill("No target file provided")
-    safedo: sign(target, entitlements)
+    case cos:
+      of pMacos:
+        var dest = cos.findApp(if target != "": target else: getCurrentDir())
+        if dest == "": dest = findDmg(if dest != "": dest else: getCurrentDir())
+        if dest == "": kill("No target file provided")
+        signMacOS(target, entitlements)
+      of pWin32,pWin64:
+        signWindows(cos, target, p12file, name, url)
+      else: discard

@@ -1,4 +1,4 @@
-import os, osproc, strutils, argparse, myexec, autos
+import os, strutils, argparse, myexec, autos
 
 const UUID_HEADER="RequestUUID"
 const SLEEP = 15
