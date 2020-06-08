@@ -120,9 +120,19 @@ Default resources:
     app.icns         : The application icon
     dmg_template.zip : The application DMG template
     [ASSOC].icns     : The file association icons for file extensions ASSOC. E.g. for an association of ".txt" files, the filename should be "txt.icns"
+
   Windows specific:
     app.ico          : The application icon
+    install.ico      : The installer icon
+    logo-install.bmp : The logo to display on the left of the installer
+    logo-install-small.bmp
+    logo-install-small.bmp
+                     : The small icon to display on the installer
     [ASSOC].ico      : The file association icons for file extensions ASSOC. E.g. for an association of ".txt" files, the filename should be "txt.ico"
+
+  Linux specific:
+    app.png          : The application icon
+
       """
       exit(true)
   command("create"):

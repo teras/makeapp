@@ -138,6 +138,10 @@ Comment={descr}
     signcmd & "/opt/appimage/AppRun -v " & cname & (if sign:" --sign" else:"") & " " & name & ".appimage"
   moveFile inst_res / name & ".appimage", output_file
 
+proc createGenericPack(output_file, outdir, app:string) =
+  myexec "", "tar", "jcvf", output_file, "-C", outdir, app.extractFilename
+  discard
+
 proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, gpgdir, res, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
@@ -152,6 +156,7 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
       of pMacos: createMacosPack(os_template, output_file, app, res, sign, entitlements)
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, res, name, version, descr, url, vendor, sign, assoc)
       of pLinux32,pLinux64: createLinuxPack(output_file, gpgdir, res, app, name, descr, cat, sign)
+      of pGeneric: createGenericPack(output_file, outdir, app)
     
     
 

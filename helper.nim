@@ -1,4 +1,4 @@
-import os, strutils, posix, autos, types, parsecfg, sequtils
+import os, strutils, posix, autos, types, parsecfg
 
 proc resource*(resourcedir:string, resource:string):string =
   let path = if resourcedir == "": resource else: resourcedir / resource

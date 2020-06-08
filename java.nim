@@ -102,7 +102,7 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
       (if icon=="":"" else: " -d:ICON=target/appicon.ico") &
       " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\""
   copyFile(execOut / exec, dest / exec)
-  myexec "Extract JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdk", "wine" & $bits,
+  myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdk", "wine" & $bits,
     "/java/win" & $bits & "/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/jre", "--no-header-files",
     "--no-man-pages", "--compress=1"
   return dest
@@ -117,9 +117,10 @@ proc makeLinux(output:string, resources:string, name:string, version:string, app
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux -d:JREPATH=jre -d:JARPATH=" & jar & 
       " -o:target/AppRun javalauncher ; strip target/AppRun"
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
-  myexec "Extract JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdk", 
+  myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdk", 
     "/java/linux/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/jre", "--no-header-files",
     "--no-man-pages", "--compress=1"
+  return dest
 
 proc makeMacos(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
@@ -150,6 +151,21 @@ proc makeMacos(output:string, resources:string, name:string, version:string, app
   (app & "/Contents/runtime/Contents/MacOS").removeDir(true)
   return app & "/Contents/app"
 
+proc makeGeneric(output, name, version, appdir, jar:string):string =
+  let cname = name.toLowerAscii
+  let dest = output / cname & "-" & version & "." & pGeneric.appx
+  merge dest, appdir
+
+  let launcherfile = dest / cname
+  let launcher = """
+#!/bin/sh
+cd "`dirname \"$0\"`"
+java -jar """" & jar & """"
+"""
+  writeFile launcherfile, launcher
+  launcherfile.setFilePermissions({fpUserExec, fpUserRead, fpUserWrite, fpGroupExec, fpGroupRead, fpOthersExec, fpOthersRead})
+  return dest
+
 proc copyExtraFiles(app:string, extra:string, ostype:OSType) =
   let common = extra / "common"
   if common.dirExists: merge(app, common)
@@ -176,4 +192,5 @@ proc makeJava*(os:seq[OSType], output:string, resources:string, name:string, ver
       of pMacos: makeMacos(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
       of pWin32, pWin64: makeWindows(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
       of pLinux32, pLinux64: makeLinux(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
+      of pGeneric: makeGeneric(output, name, version, appdir, jar)
     if extra != "": copyExtraFiles(appout, extra, cos)
