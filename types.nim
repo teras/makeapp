@@ -21,8 +21,8 @@ proc appx*(ostype:OSType):string = return case ostype:
   of pMacos: "app"
   of pWin32: "w32"
   of pWin64: "w64"
-  of pLinux32: "l32"
-  of pLinux64: "l64"
+  of pLinux32: "i686.appdir"
+  of pLinux64: "x86_64.appdir"
 
 proc packx*(ostype:OSType):string = return case ostype:
   of pMacos: "dmg"

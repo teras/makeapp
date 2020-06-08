@@ -98,6 +98,7 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/windows -d:mingw -d:APPNAME=\"" & name & "\"" &
       " -d:COMPANY=\"" & vendor & "\" -d:DESCRIPTION=\"" & description & "\" -d:APPVERSION=" & version &
       " -d:LONGVERSION=" & longversion & " -d:COPYRIGHT=\"" & "(C) "&vendor & "\"" &
+      " -d:JREPATH=jre -d:JARPATH=" & jar & 
       (if icon=="":"" else: " -d:ICON=target/appicon.ico") &
       " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\""
   copyFile(execOut / exec, dest / exec)
@@ -109,7 +110,16 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
 proc makeLinux(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, ostype:OSType):string =
-  discard
+  let dest = output / name & "." & ostype.appx
+  merge dest, appdir
+  let execOut = randomDir()
+  myexec "Create executable", "docker", "run", "--rm", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
+    "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux -d:JREPATH=jre -d:JARPATH=" & jar & 
+      " -o:target/AppRun javalauncher ; strip target/AppRun"
+  copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
+  myexec "Extract JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdk", 
+    "/java/linux/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/jre", "--no-header-files",
+    "--no-man-pages", "--compress=1"
 
 proc makeMacos(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,

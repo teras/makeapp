@@ -40,6 +40,7 @@ template infoOpt(baseonly:bool) =
   if not baseonly:
     option("--version", help="The version of the application")
     option("--descr", help="Application description")
+    option("--cat", help="The categories of the application")
     option("--vendor", help="The vendor of the package")
     option("--assoc", multiple=true, help="File associations with this application. Format is EXT:MIMETYPE:DESCRIPTION. Only the EXT part is required. All other parts could be missing. To provide a custom icon, under resource folder use an file named as \"EXT.icns\". Usage example: \"ass:text/x-ssa:ASS Subtitle file\"")
   option("--url", help="Product URL")
@@ -49,6 +50,7 @@ template infoImp(res:string) =
     descr {.inject.} = if opts.descr == "" : opts.name else: opts.descr
     assoc {.inject.} = findAccociations(opts.assoc, res)
     vendor {.inject.} = if opts.vendor == "": findUsername().capitalizeAscii else: opts.vendor
+    cat {.inject.} = opts.cat
 
 template javaOpt() =
   option("--appdir", help="The directory where the application itself is stored")
@@ -138,7 +140,7 @@ Default resources:
       sendImp(notarize)
       verboseImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
-      safedo: createPack(os, "", output, output, true, entitle, p12file, res, name, version, descr, url, vendor, assoc)
+      safedo: createPack(os, "", output, output, true, entitle, p12file, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
         safedo: sendToApple(id, output / name & "-" & version & ".dmg", ascprovider)
       exit()
@@ -178,7 +180,7 @@ Default resources:
       ostypeImp(true)
       signImp(sign, keyfile)
       verboseImp()
-      safedo: createPack(os, templ, output, opts.target, sign, entitle, p12file, res, name, version, descr, url, vendor, assoc)
+      safedo: createPack(os, templ, output, opts.target, sign, entitle, p12file, res, name, version, descr, url, vendor, cat, assoc)
       exit()
   command("sign"):
     option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
@@ -193,7 +195,6 @@ Default resources:
       nameresImp()
       signImp(true, keyfile)
       verboseImp()
-      echo name, url
       safedo: sign(os, opts.target, entitle, p12file, name, url)
       exit()
   when system.hostOS == "macosx":

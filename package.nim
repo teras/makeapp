@@ -117,13 +117,13 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, res, n
   if sign:
     sign(@[os], output_file, "", p12file, name, url)
 
-proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, res, name, version, descr, url, vendor:string, assoc:seq[Assoc]) =
+proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, res, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
       app = checkParam(findApp(cos, if app != "": app else: getCurrentDir()), "No Application." & cos.appx & " found under " & (if app != "": app else: getCurrentDir()))
       name = if name != "": name else:
         let fname = app.extractFilename
-        fname.substr(0,fname.len-5)
+        fname.substr(0,fname.len - cos.appx.len-2)
       outdir = if outdir == "": getCurrentDir() else: outdir.absolutePath
       output_file = outdir / name & "-" & version & "." & cos.packx
     info "Creating " & ($cos).capitalizeAscii & " installer"
