@@ -6,6 +6,7 @@ const NOTARIZE_USER         = "NOTARIZE_USER"
 const NOTARIZE_ASC_PROVIDER = "NOTARIZE_ASC_PROVIDER"
 const NOTARIZE_SIGN_ID      = "NOTARIZE_SIGN_ID"
 const SIGN_P12_PASS         = "SIGN_P12_PASS"
+const SIGN_GPG_PASS         = "SIGN_GPG_PASS"
 
 const VERSION {.strdefine.}: string = ""
 
@@ -76,18 +77,24 @@ template signOpt() =
   option("--entitle", help="Use the provided file as entitlements, defaults to a generic entitlements file. [MacOS target]")
   option("--p12file", help="The p12 file containing the signing keys. [Windows target]")
   option("--p12pass", help="The password of the p12file. [Windows target]")
+  option("--gpgdir", help="The GnuPG directory containing the signing keys. [Linux target]")
+  option("--gpgpass", help="The password of the GnuPG file. [Windows target]")
 template signImp(sign:bool, keyfile:string) =
   if sign:
     let config = if keyfile != "" and keyfile.fileExists: loadConfig(keyfile) else: newConfig()
-    ID = if opts.signid != "" : opts.signid else: getEnv(NOTARIZE_SIGN_ID, config.getSectionValue("", NOTARIZE_SIGN_ID))
-    if os.contains(pMacos): checkParam(ID,"No sign id provided")
-    P12PASS = if opts.p12pass != "" : opts.p12pass else: getEnv(SIGN_P12_PASS, config.getSectionValue("", SIGN_P12_PASS))
-    if os.contains(pWin32) or os.contains(pWin64): checkParam(ID,"No p12 password provided")
+    ID = config.checkPass(opts.signid, NOTARIZE_SIGN_ID, "No sign id provided", os, @[pMacos])
+    P12PASS = config.checkPass(opts.p12pass, SIGN_P12_PASS, "No p12 password provided", os, @[pWin32, pWin64])
+    GPGPASS = config.checkPass(opts.gpgpass, SIGN_GPG_PASS, "No GnuPG password provided", os, @[pLinux32, pLinux64])
   let entitle {.inject.} = if not sign: "" else: checkParam(if opts.entitle == "": getDefaultEntitlementFile() else: opts.entitle.absolutePath.normalizedPath, "Required entitlements file " & opts.entitle & " does not exist")
   let p12file {.inject.} = opts.p12file
-  if os.contains(pWin32) or os.contains(pWin64):
-    if p12file=="": kill "No p12 file provided"
-    elif not p12file.fileExists: kill "No p12 file " & p12file & " exists"
+  let gpgdir {.inject.} = opts.gpgdir
+  if sign:
+    if os.contains(pWin32) or os.contains(pWin64):
+      if p12file=="": kill "No p12 file provided"
+      elif not p12file.fileExists: kill "No p12 file " & p12file & " exists"
+    if os.contains(pLinux32) or os.contains(pLinux64):
+      if gpgdir=="": kill "No GnuPG directory provided"
+      elif not gpgdir.dirExists: kill "No GnuPG directory " & p12file & " exists"
 
 template sendOpt() =
   option("--password", help="The Apple password")
@@ -140,7 +147,7 @@ Default resources:
       sendImp(notarize)
       verboseImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
-      safedo: createPack(os, "", output, output, true, entitle, p12file, res, name, version, descr, url, vendor, cat, assoc)
+      safedo: createPack(os, "", output, output, true, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
         safedo: sendToApple(id, output / name & "-" & version & ".dmg", ascprovider)
       exit()
@@ -180,7 +187,7 @@ Default resources:
       ostypeImp(true)
       signImp(sign, keyfile)
       verboseImp()
-      safedo: createPack(os, templ, output, opts.target, sign, entitle, p12file, res, name, version, descr, url, vendor, cat, assoc)
+      safedo: createPack(os, templ, output, opts.target, sign, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       exit()
   command("sign"):
     option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
@@ -195,6 +202,7 @@ Default resources:
       nameresImp()
       signImp(true, keyfile)
       verboseImp()
+      if os.contains(@[pLinux32, pLinux64]): kill "Signing on Linux is not supported; signing is supported only when packaging"
       safedo: sign(os, opts.target, entitle, p12file, name, url)
       exit()
   when system.hostOS == "macosx":

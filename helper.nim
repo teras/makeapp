@@ -1,4 +1,4 @@
-import os, strutils, posix, autos, types
+import os, strutils, posix, autos, types, parsecfg, sequtils
 
 proc resource*(resourcedir:string, resource:string):string =
   let path = if resourcedir == "": resource else: resourcedir / resource
@@ -47,6 +47,16 @@ proc checkParam*(param:string, error:string, asFile=false, asDir=false): string 
   if asFile and not param.fileExists: kill "Unable to locate file " & param.absolutePath
   if asDir and not param.dirExists: kill "Unable to locate directory " & param.absolutePath
   return param
+
+proc contains*[T](a: openArray[T], items: openArray[T]): bool =
+  for item in items:
+    if a.contains(item):
+      return true
+  return false
+
+proc checkPass*(config:Config, value,tag,error:string, os:seq[OSType], possibleOS:seq[OSType]):string =
+  result = if value != "" : value else: getEnv(tag, config.getSectionValue("", tag))
+  if result=="" and contains(os, possibleOS): kill error
 
 proc merge*(basedir:string, otherdir:string) =
   basedir.createDir

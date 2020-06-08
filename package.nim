@@ -1,4 +1,4 @@
-import myexec, nim_miniz, os, strutils, autos, sign, helper, types, sequtils
+import myexec, nim_miniz, os, strutils, autos, sign, helper, types, sequtils, strformat
 
 proc findDmgDestination(dest,appname:string): string =
   var found:seq[string]
@@ -117,7 +117,28 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, res, n
   if sign:
     sign(@[os], output_file, "", p12file, name, url)
 
-proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, res, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
+proc createLinuxPack(output_file, gpgdir, res, app, name, descr, cat:string, sign:bool) =
+  let inst_res = randomDir()
+  let cname = name.toLowerAscii
+  var desktop = fmt"""[Desktop Entry]
+Type=Application
+Name={name}
+Exec={cname} %u
+Categories={cat}
+Comment={descr}
+"""
+  let icon = res.resource("app.png")
+  if icon.fileExists:
+    copyFile icon, app / cname&".png"
+    desktop.add &"Icon={cname}\n"
+
+  writeFile app / cname&".desktop", desktop
+  let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGPASS & "' `mktemp` ; "
+  myexec "", "docker", "run", "-t", "--rm", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder", "bash", "-c", 
+    signcmd & "/opt/appimage/AppRun -v " & cname & (if sign:" --sign" else:"") & " " & name & ".appimage"
+  moveFile inst_res / name & ".appimage", output_file
+
+proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, gpgdir, res, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
       app = checkParam(findApp(cos, if app != "": app else: getCurrentDir()), "No Application." & cos.appx & " found under " & (if app != "": app else: getCurrentDir()))
@@ -130,7 +151,7 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
     case cos:
       of pMacos: createMacosPack(os_template, output_file, app, res, sign, entitlements)
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, res, name, version, descr, url, vendor, sign, assoc)
-      of pLinux32,pLinux64: discard
+      of pLinux32,pLinux64: createLinuxPack(output_file, gpgdir, res, app, name, descr, cat, sign)
     
     
 
