@@ -27,8 +27,7 @@ const DEFAULT_ENTITLEMENT = """
 proc getDefaultEntitlementFile*(): string = randomFile(DEFAULT_ENTITLEMENT)
 
 proc signFile(path:string, entitlements:string) =
-  myexec "Sign " & (if path.existsDir: "app" else: "file") & " " & path.extractFilename, 
-    "codesign", "--timestamp", "--deep", "--force", "--verify", "--verbose", "--options", "runtime", "--sign", ID, "--entitlements", entitlements, path
+  myexec "", "codesign", "--timestamp", "--deep", "--force", "--verify", "--verbose", "--options", "runtime", "--sign", ID, "--entitlements", entitlements, path
   myexec "", "codesign", "--verify", "--verbose", path
 
 proc signMacOSJarEntries(jarfile:string, entitlements:string) =
@@ -52,7 +51,9 @@ proc signMacOSImpl(path:string, entitlements:string, rootSign:bool): seq[string]
   if rootSign:
     signFile(path, entitlements)
 
-proc signMacOS(path:string, entitlements:string) = discard signMacOSImpl(path, entitlements, true)
+proc signMacOS(path:string, entitlements:string) =
+  info "Sign " & (if path.existsDir: "app" else: "file") & " " & path.extractFilename
+  discard signMacOSImpl(path, entitlements, true)
 
 proc signWindows(os:OSType, target,p12file,name,url:string) =
   let unsigned = (if target.endsWith(".exe"): target.substr(0,target.len-5) else:target) & ".unsigned.exe"
