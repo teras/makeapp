@@ -135,12 +135,11 @@ Comment={descr}
   writeFile app / cname&".desktop", desktop
   let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGPASS & "' `mktemp` ; "
   myexec "", "docker", "run", "-t", "--rm", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder", "bash", "-c", 
-    signcmd & "/opt/appimage/AppRun -v " & cname & (if sign:" --sign" else:"") & " " & name & ".appimage"
+    signcmd & "/opt/appimage/AppRun --comp xz -v " & cname & (if sign:" --sign" else:"") & " -n " & name & ".appimage"
   moveFile inst_res / name & ".appimage", output_file
 
-proc createGenericPack(output_file, outdir, app:string) =
-  myexec "", "tar", "jcvf", output_file, "-C", outdir, app.extractFilename
-  discard
+proc createGenericPack(output_file, app:string) =
+  myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
 
 proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, gpgdir, res, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
@@ -151,12 +150,13 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
         fname.substr(0,fname.len - cos.appx.len-2)
       outdir = if outdir == "": getCurrentDir() else: outdir.absolutePath
       output_file = outdir / name & "-" & version & "." & cos.packx
+    outdir.createDir
     info "Creating " & ($cos).capitalizeAscii & " installer"
     case cos:
       of pMacos: createMacosPack(os_template, output_file, app, res, sign, entitlements)
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, res, name, version, descr, url, vendor, sign, assoc)
       of pLinux32,pLinux64: createLinuxPack(output_file, gpgdir, res, app, name, descr, cat, sign)
-      of pGeneric: createGenericPack(output_file, outdir, app)
+      of pGeneric: createGenericPack(output_file, app)
     
     
 

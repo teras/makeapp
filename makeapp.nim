@@ -23,9 +23,12 @@ template ostypeImp(single:bool) =
   let os {.inject.} = findOS(opts.os)
   if single and os.len>1: kill "Only one OS is supported for this mode"
 
-template verboseOpt() = flag("-v", "--verbose", multiple=true, help="Be more verbose when signing files. 0=quiet and only errors, 1=show output, 2=show output and command, 3=show everything including passwords")
-template verboseImp() =
+template allOpt() =
+  flag("-v", "--verbose", multiple=true, help="Be more verbose when signing files. 0=quiet and only errors, 1=show output, 2=show output and command, 3=show everything including passwords")
+  flag("--keeponerror", help="Keep temporary files when commands fail to execute. This option is useful for debugging purposes")
+template allImp() =
   VERBOCITY = opts.verbose
+  KEEPONERROR = opts.keeponerror
 
 template resOpt() = option("--res", help="The location of the resources files, needed when the application is built.")
 template nameresImp() =
@@ -115,6 +118,17 @@ const p = newParser("makeapp " & VERSION):
   command("help"):
     run:
       echo """
+Environmental variables:
+  macOS:
+    NOTARIZE_APP_PASSWORD : The notarizing password of the current user
+    NOTARIZE_USER         : The notarizing user
+    NOTARIZE_ASC_PROVIDER : Notarizing asc. provider
+    NOTARIZE_SIGN_ID      : The ID of the user which will be used to sing the application 
+  Windows:
+    SIGN_P12_PASS         : The password of the p12 file
+  Linux:
+    SIGN_GPG_PASS         : The password of the GnuPG file
+
 Default resources:
   macOS specific: 
     app.icns         : The application icon
@@ -133,6 +147,17 @@ Default resources:
   Linux specific:
     app.png          : The application icon
 
+Extras folder organization:
+    extras
+    ├── common
+    ├── linux32
+    ├── linux64
+    ├── linux
+    ├── win32
+    ├── win64
+    ├── windows
+    └── macos
+     
       """
       exit(true)
   command("create"):
@@ -140,11 +165,12 @@ Default resources:
     infoOpt(false)
     javaOpt()
     option("--notarize", help="Notarize DMG application after creation, boolean value. Defaults to false")
+    option("--instoutput", help="The output location of the installer files. Defaults to the same as --output")
     signOpt()
     sendOpt()
     keyfileOpt()
     ostypeOpt()
-    verboseOpt()
+    allOpt()
     run:
       commonOutImp()
       nameresImp()
@@ -154,26 +180,27 @@ Default resources:
       ostypeImp(false)
       signImp(true, keyfile)
       let notarize = opts.notarize.isTrue
+      let instoutput = if opts.instoutput == "": output else: opts.instoutput
       sendImp(notarize)
-      verboseImp()
+      allImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
-      safedo: createPack(os, "", output, output, true, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
+      safedo: createPack(os, "", instoutput, output, true, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
-        safedo: sendToApple(id, output / name & "-" & version & ".dmg", ascprovider)
+        safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)
       exit()
   command("java"):
     commonOutOpt()
     infoOpt(false)
     javaOpt()
     ostypeOpt()
-    verboseOpt()
+    allOpt()
     run:
       commonOutImp()
       nameresImp()
       infoImp(res)
       javaImp(name)
       ostypeImp(false)
-      verboseImp()
+      allImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
       exit()
   command("pack"):
@@ -186,7 +213,7 @@ Default resources:
     flag("--nosign", help="Skp sign procedure")
     keyfileOpt()
     ostypeOpt()
-    verboseOpt()
+    allOpt()
     run:
       commonOutImp(false)
       nameresImp()
@@ -196,7 +223,7 @@ Default resources:
       let sign = not opts.nosign
       ostypeImp(true)
       signImp(sign, keyfile)
-      verboseImp()
+      allImp()
       safedo: createPack(os, templ, output, opts.target, sign, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       exit()
   command("sign"):
@@ -205,13 +232,13 @@ Default resources:
     infoOpt(true)
     keyfileOpt()
     ostypeOpt()
-    verboseOpt()
+    allOpt()
     run:
       keyfileImp()
       ostypeImp(true)
       nameresImp()
       signImp(true, keyfile)
-      verboseImp()
+      allImp()
       if os.contains(@[pLinux32, pLinux64]): kill "Signing on Linux is not supported; signing is supported only when packaging"
       safedo: sign(os, opts.target, entitle, p12file, name, url)
       exit()
@@ -221,11 +248,11 @@ Default resources:
       option("--id", help="Reverse URL unique identifier. When missing, the system guess from existing PList files inside an .app folder")
       option("-t", "--target", help="The location of the DMG/ZIP file. When missing the system will scan the directory tree below this point")
       keyfileOpt()
-      verboseOpt()
+      allOpt()
       run:
         keyfileImp()
         sendImp(true)
-        verboseImp()
+        allImp()
         let target = if opts.target != "": opts.target else: getCurrentDir()
         let id = checkParam(if opts.id != "": opts.id else: loadPlist(findPlist(target)).getOrDefault("CFBundleIdentifier").getStr(""), "No Bundle ID provided")
         var fileToSend = findDmg(target)

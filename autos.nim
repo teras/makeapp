@@ -8,7 +8,8 @@ when defined(macosx):  # required by tempfile to be friendly with docker
 var toDelete: seq[string]
 var toDelegate: seq[proc()]
 
-var VERBOCITY*: int = 0
+var VERBOCITY* = 0
+var KEEPONERROR* = false
 
 proc info*(message:string) = echo message
 
@@ -37,9 +38,8 @@ proc randomDir*():string =
   result.deleteLater
 
 proc terminate(message:string, error=true, quiet:bool) =
-  deleteNow()
-  if not quiet:
-    info (if error:"** Error" else:"Success") & (if message!="": ": " & message else:"")
+  if not error or not KEEPONERROR: deleteNow()
+  if not quiet: info (if error:"** Error" else:"Success") & (if message!="": ": " & message else:"")
   quit(if error:1 else:0)
 
 proc exit*(quiet=false) = terminate("", error=false, quiet=quiet)
