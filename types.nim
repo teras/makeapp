@@ -26,13 +26,18 @@ proc appx*(ostype:OSType):string = return case ostype:
   of pLinuxArm64: "aarch64.appdir"
   of pGeneric: "generic"
 
+proc cpu*(ostype:OSType):string = return case ostype:
+  of pMacos, pLinux64, pWin64: "x86_64"
+  of pWin32: "i386"
+  of pLinuxArm64: "aarch64"
+  of pLinuxArm32: "armhf"
+  of pGeneric: "any"
+
 proc packx*(ostype:OSType):string = return case ostype:
   of pMacos: "dmg"
   of pWin64: "x64.exe"
   of pWin32: "x32.exe"
-  of pLinux64: "x86_64.appimage"
-  of pLinuxArm32: "arm.appimage"
-  of pLinuxArm64: "aarch64.appimage"
+  of pLinux64, pLinuxArm32, pLinuxArm64: ostype.cpu & ".appimage"
   of pGeneric: "tar.bz2"
 
 proc bits*(ostype:OSType):int = return if ($ostype).contains("32"): 32 else: 64

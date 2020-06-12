@@ -117,7 +117,7 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, res, n
   if sign:
     sign(@[os], output_file, "", p12file, name, url)
 
-proc createLinuxPack(output_file, gpgdir, res, app, name, descr, cat:string, sign:bool) =
+proc createLinuxPack(os:OSType, output_file, gpgdir, res, app, name, descr, cat:string, sign:bool) =
   let inst_res = randomDir()
   let cname = name.toLowerAscii
   var desktop = fmt"""[Desktop Entry]
@@ -131,11 +131,11 @@ Comment={descr}
   if icon.fileExists:
     copyFile icon, app / cname&".png"
     desktop.add &"Icon={cname}\n"
-
   writeFile app / cname&".desktop", desktop
+  let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
   let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGPASS & "' `mktemp` ; "
   myexec "", "docker", "run", "-t", "--rm", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder", "bash", "-c", 
-    signcmd & "/opt/appimage/AppRun --comp xz -v " & cname & (if sign:" --sign" else:"") & " -n " & name & ".appimage"
+    signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name & ".appimage"
   moveFile inst_res / name & ".appimage", output_file
 
 proc createGenericPack(output_file, app:string) =
@@ -155,8 +155,7 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
     case cos:
       of pMacos: createMacosPack(os_template, output_file, app, res, sign, entitlements)
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, res, name, version, descr, url, vendor, sign, assoc)
-      of pLinux64: createLinuxPack(output_file, gpgdir, res, app, name, descr, cat, sign)
-      of pLinuxArm32, pLinuxArm64: info "No package can be created yet for " & $cos & " target"
+      of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, descr, cat, sign)
       of pGeneric: createGenericPack(output_file, app)
     
     
