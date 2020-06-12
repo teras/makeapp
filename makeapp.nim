@@ -86,16 +86,16 @@ template signImp(sign:bool, keyfile:string) =
   if sign:
     let config = if keyfile != "" and keyfile.fileExists: loadConfig(keyfile) else: newConfig()
     ID = config.checkPass(opts.signid, NOTARIZE_SIGN_ID, "No sign id provided", os, @[pMacos])
-    P12PASS = config.checkPass(opts.p12pass, SIGN_P12_PASS, "No p12 password provided", os, @[pWin32, pWin64])
-    GPGPASS = config.checkPass(opts.gpgpass, SIGN_GPG_PASS, "No GnuPG password provided", os, @[pLinux32, pLinux64])
+    P12PASS = config.checkPass(opts.p12pass, SIGN_P12_PASS, "No p12 password provided", os, windowsTargets)
+    GPGPASS = config.checkPass(opts.gpgpass, SIGN_GPG_PASS, "No GnuPG password provided", os, linuxTargets)
   let entitle {.inject.} = if not sign: "" else: checkParam(if opts.entitle == "": getDefaultEntitlementFile() else: opts.entitle.absolutePath.normalizedPath, "Required entitlements file " & opts.entitle & " does not exist")
   let p12file {.inject.} = opts.p12file
   let gpgdir {.inject.} = opts.gpgdir
   if sign:
-    if os.contains(pWin32) or os.contains(pWin64):
+    if os.contains(windowsTargets):
       if p12file=="": kill "No p12 file provided"
       elif not p12file.fileExists: kill "No p12 file " & p12file & " exists"
-    if os.contains(pLinux32) or os.contains(pLinux64):
+    if os.contains(linuxTargets):
       if gpgdir=="": kill "No GnuPG directory provided"
       elif not gpgdir.dirExists: kill "No GnuPG directory " & p12file & " exists"
 
@@ -239,7 +239,7 @@ Extras folder organization:
       nameresImp()
       signImp(true, keyfile)
       allImp()
-      if os.contains(@[pLinux32, pLinux64]): kill "Signing on Linux is not supported; signing is supported only when packaging"
+      if os.contains(linuxTargets): kill "Signing on Linux is not supported; signing is supported only when packaging"
       safedo: sign(os, opts.target, entitle, p12file, name, url)
       exit()
   when system.hostOS == "macosx":

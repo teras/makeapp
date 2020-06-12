@@ -155,7 +155,8 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
     case cos:
       of pMacos: createMacosPack(os_template, output_file, app, res, sign, entitlements)
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, res, name, version, descr, url, vendor, sign, assoc)
-      of pLinux32,pLinux64: createLinuxPack(output_file, gpgdir, res, app, name, descr, cat, sign)
+      of pLinux64: createLinuxPack(output_file, gpgdir, res, app, name, descr, cat, sign)
+      of pLinuxArm32, pLinuxArm64: info "No package can be created yet for " & $cos & " target"
       of pGeneric: createGenericPack(output_file, app)
     
     
