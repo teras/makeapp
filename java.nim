@@ -110,12 +110,12 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/windows -d:mingw -d:APPNAME=\"" & name & "\"" &
       " -d:COMPANY=\"" & vendor & "\" -d:DESCRIPTION=\"" & description & "\" -d:APPVERSION=" & version &
       " -d:LONGVERSION=" & longversion & " -d:COPYRIGHT=\"" & "(C) "&vendor & "\"" &
-      " -d:JREPATH=jre -d:JARPATH=" & jar & 
+      " -d:JREPATH=runtime -d:JARPATH=" & jar &
       (if icon=="":"" else: " -d:ICON=target/appicon.ico") &
       " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\""
   copyFile(execOut / exec, dest / exec)
   myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdkwin", "wine" & $bits,
-    "/java/win" & $bits & "/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/jre", "--no-header-files",
+    "/java/win" & $bits & "/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/runtime", "--no-header-files",
     "--no-man-pages", "--compress=1"
   return dest
 
@@ -132,11 +132,11 @@ proc makeLinux(output:string, resources:string, name:string, version:string, app
   let compileFlags = if ostype==pLinuxArm32: "--cpu:arm --os:linux" elif ostype==pLinuxArm64: "--cpu:arm64 --os:linux" else: ""
   let strip = if ostype==pLinuxArm32: "arm-linux-gnueabi-strip" elif ostype==pLinuxArm64: "aarch64-linux-gnu-strip" else: "strip"
   myexec "Create " & $ostype & " executable", "docker", "run", "--rm", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
-    "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=jre -d:JARPATH=" & jar & 
+    "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" & jar & 
       " -o:target/AppRun javalauncher ; " & strip & " target/AppRun"
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
   myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "adoptopenjdk/openjdk14:" & imageFlavour, 
-    "jlink", "--add-modules", modules, "--output", "/usr/src/myapp/jre", "--no-header-files",
+    "jlink", "--add-modules", modules, "--output", "/usr/src/myapp/runtime", "--no-header-files",
     "--no-man-pages", "--compress=1"
   return dest
 
