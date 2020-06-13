@@ -24,8 +24,10 @@ proc findOS*(list:string):seq[OSType] =
       elif system.hostOS == "linux":
         if system.hostCPU == "amd64":
           os.add pLinux64
-        elif system.hostCPU == "i386":
-          os.add pLinux32
+        elif system.hostCPU == "arm64":
+          os.add pLinuxArm64
+        elif system.hostCPU == "arm":
+          os.add pLinuxArm32
         else:
           kill "Unsupported Linux CPU type"
       elif system.hostOS == "windows":

@@ -197,8 +197,8 @@ Extras folder organization:
     run:
       commonOutImp()
       nameresImp()
-      infoImp(res)
       javaImp(name)
+      infoImp(res)
       ostypeImp(false)
       allImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)

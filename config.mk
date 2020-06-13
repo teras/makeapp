@@ -1,6 +1,6 @@
 NAME=makeapp
 NIMBLE=plists argparse nim_miniz tempfile
-ALLTARGETS=osx
+ALLTARGETS=osx win32 linux
 RUNARGS=sign
 #DEBUG=true
 COMPRESS=true
