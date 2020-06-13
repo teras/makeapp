@@ -86,13 +86,15 @@ proc constructId*(username:string, name:string): string = "app." & username.toLo
 
 proc makeWindows(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string, ostype:OSType):string =
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
   let bits = ostype.bits
   let exec = name & ".exe"
   let cpu = if bits==32: "i386" else: "amd64"
   let strip = if bits==32: "i686-w64-mingw32-strip" else: "x86_64-w64-mingw32-strip"
   let dest = output / name & "." & ostype.appx
-  merge dest, appdir
+  dest.createDir
+  if singlejar: copyFile(appdir / jar, dest / jar)
+  else: merge dest, appdir
   let longversion = "1.0.0.0"
   let execOut = randomDir()
   if icon != "": copyFile(icon, execOut / "appicon.ico")
@@ -112,9 +114,11 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
 # https://bugs.launchpad.net/qemu/+bug/1805913
 proc makeLinux(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string, ostype:OSType):string =
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
   let dest = output / name & "." & ostype.appx
-  merge dest, appdir
+  dest.createDir
+  if singlejar: copyFile(appdir / jar, dest / jar)
+  else: merge dest, appdir
   let execOut = randomDir()
   let imageFlavour = if ostype==pLinuxArm32: "armv7l-centos-jdk-14.0.1_7-slim"
     elif ostype==pLinuxArm64: "aarch64-centos-jdk-14.0.1_7-slim"
@@ -132,13 +136,18 @@ proc makeLinux(output:string, resources:string, name:string, version:string, app
 
 proc makeMacos(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string):string =
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool):string =
   when system.hostOS != "macosx": kill "Create of a macOS package is supported only under macOS itself"
   let jpackage = if jdkhome == "": "jpackage" else:
     let possible = jdkhome / "bin" / "jpackage"
     if not possible.fileExists: kill "Unable to locate jpackage using JAVA_HOME " & jdkhome
     possible
-  var args = @[jpackage, "--app-version", version, "--name", name, "--input", appdir, "--add-modules", modules,
+  let inputdir = if singlejar:
+      let cdir = randomDir()
+      copyFile(appdir / jar, cdir / jar)
+      cdir
+    else: appdir
+  var args = @[jpackage, "--app-version", version, "--name", name, "--input", inputdir, "--add-modules", modules,
       "--main-jar", jar, "--dest", output, "--type", "app-image",
       "--copyright", "(C) "&vendor, "--description", description, "--vendor", vendor,
       "--mac-package-identifier", identifier, "--mac-package-name", name]
@@ -159,10 +168,12 @@ proc makeMacos(output:string, resources:string, name:string, version:string, app
   (app & "/Contents/runtime/Contents/MacOS").removeDir(true)
   return app & "/Contents/app"
 
-proc makeGeneric(output, name, version, appdir, jar:string):string =
+proc makeGeneric(output, name, version, appdir, jar:string, singlejar:bool):string =
   let cname = name.toLowerAscii
   let dest = output / cname & "-" & version & "." & pGeneric.appx
-  merge dest, appdir
+  dest.createDir
+  if singlejar: copyFile(appdir / jar, dest / jar)
+  else: merge dest, appdir
 
   let launcherfile = dest / cname
   let launcher = """
@@ -187,9 +198,8 @@ proc copyExtraFiles(app:string, extra:string, ostype:OSType) =
   let current = extra / osname
   if current.dirExists: merge(app, current)
 
-proc makeJava*(os:seq[OSType], output:string, resources:string, name:string, version:string, appdir:string, jar:string,
-    modules:string, jvmopts:seq[string], associations:seq[Assoc], extra:string, vendor:string,
-    description:string, identifier:string, url:string, jdkhome:string) =
+proc makeJava*(os:seq[OSType], output, resources, name, version, appdir, jar, modules:string, jvmopts:seq[string],
+    associations:seq[Assoc], extra, vendor, description, identifier, url, jdkhome:string, singlejar:bool) =
   let
     jdkhome = if jdkhome == "": getEnv("JAVA_HOME") else: jdkhome
     extra = extra.absolutePath
@@ -197,8 +207,8 @@ proc makeJava*(os:seq[OSType], output:string, resources:string, name:string, ver
   for cos in os:
     let icon = resources.resource(cos.icon("app"))
     let appout = case cos:
-      of pMacos: makeMacos(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
-      of pWin32, pWin64: makeWindows(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
-      of pLinux64, pLinuxArm32, pLinuxArm64: makeLinux(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
-      of pGeneric: makeGeneric(output, name, version, appdir, jar)
+      of pMacos: makeMacos(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar)
+      of pWin32, pWin64: makeWindows(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
+      of pLinux64, pLinuxArm32, pLinuxArm64: makeLinux(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
+      of pGeneric: makeGeneric(output, name, version, appdir, jar, singlejar)
     if extra != "": copyExtraFiles(appout, extra, cos)

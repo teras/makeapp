@@ -57,8 +57,8 @@ template infoImp(res:string) =
     cat {.inject.} = opts.cat
 
 template javaOpt() =
-  option("--appdir", help="The directory where the application itself is stored")
-  option("--jar", help="The desired entry JAR")
+  option("--jar", help="The base JAR of the application. If no --appdir is provided, then the application is considered single-JAR with no other dependencies")
+  option("--appdir", help="The directory where the application itself is stored. Could be missing: the application would be considered single-JAR")
   resOpt()
   option("--extra", help="The location of extra files to added to the bundle. This is a hierarchical folder, where first level has the name of the target (as defined by system target) or special keywords \"windows\" for all Windows targets and \"common\" for all targets. Second level are all files that will be merged with the files located at appdir.")
   option("--modules", help="Comma separated list of required modules. Defaults to \"java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets\"")
@@ -67,7 +67,13 @@ template javaOpt() =
   option("--jdk", help="The location of the JDK")
 template javaImp(name:string) =
   let
-    appdir {.inject.} = checkParam(opts.appdir, "No application directory provided", asDir=true).absolutePath.normalizedPath
+    appdir {.inject.} = if opts.appdir != "":
+        if not opts.appdir.dirExists: kill "Not a directory: " & opts.appdir
+        opts.appdir.absolutePath.normalizedPath
+      else:
+        if not opts.jar.fileExists: kill "No --appdir defined and --jar is not properly set"
+        opts.jar.parentDir.absolutePath.normalizedPath
+    singlejar {.inject.} = opts.appdir == ""
     jar {.inject.} = getJar(opts.jar, appdir)
     extra {.inject.} = opts.extra
     modules {.inject.} = if opts.modules == "" : "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets" else: opts.modules
@@ -183,7 +189,7 @@ Extras folder organization:
       let instoutput = if opts.instoutput == "": output else: opts.instoutput
       sendImp(notarize)
       allImp()
-      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
+      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
       safedo: createPack(os, "", instoutput, output, true, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
         safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)
@@ -201,7 +207,7 @@ Extras folder organization:
       infoImp(res)
       ostypeImp(false)
       allImp()
-      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
+      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
       exit()
   command("pack"):
     commonOutOpt()
