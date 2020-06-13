@@ -84,6 +84,16 @@ proc getJvmOpts*(opts:seq[string]): seq[string] =
 
 proc constructId*(username:string, name:string): string = "app." & username.toLowerAscii & "." & name.splitWhitespace.join.toLowerAscii
 
+proc copyAppFiles(appdir, dest, jar:string, singlejar:bool):string =
+  if singlejar:
+    let dest_app = dest / "app"
+    dest_app.createDir
+    copyFile(appdir / jar, dest_app / jar)
+    return "app" / jar
+  else:
+    merge dest, appdir
+    return jar
+
 proc makeWindows(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
@@ -92,9 +102,7 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
   let cpu = if bits==32: "i386" else: "amd64"
   let strip = if bits==32: "i686-w64-mingw32-strip" else: "x86_64-w64-mingw32-strip"
   let dest = output / name & "." & ostype.appx
-  dest.createDir
-  if singlejar: copyFile(appdir / jar, dest / jar)
-  else: merge dest, appdir
+  let jar = copyAppFiles(appdir, dest, jar, singlejar)
   let longversion = "1.0.0.0"
   let execOut = randomDir()
   if icon != "": copyFile(icon, execOut / "appicon.ico")
@@ -116,9 +124,7 @@ proc makeLinux(output:string, resources:string, name:string, version:string, app
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
   let dest = output / name & "." & ostype.appx
-  dest.createDir
-  if singlejar: copyFile(appdir / jar, dest / jar)
-  else: merge dest, appdir
+  let jar = copyAppFiles(appdir, dest, jar, singlejar)
   let execOut = randomDir()
   let imageFlavour = if ostype==pLinuxArm32: "armv7l-centos-jdk-14.0.1_7-slim"
     elif ostype==pLinuxArm64: "aarch64-centos-jdk-14.0.1_7-slim"
@@ -171,10 +177,7 @@ proc makeMacos(output:string, resources:string, name:string, version:string, app
 proc makeGeneric(output, name, version, appdir, jar:string, singlejar:bool):string =
   let cname = name.toLowerAscii
   let dest = output / cname & "-" & version & "." & pGeneric.appx
-  dest.createDir
-  if singlejar: copyFile(appdir / jar, dest / jar)
-  else: merge dest, appdir
-
+  let jar = copyAppFiles(appdir, dest, jar, singlejar)
   let launcherfile = dest / cname
   let launcher = """
 #!/bin/sh
