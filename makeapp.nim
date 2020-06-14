@@ -67,14 +67,14 @@ template javaOpt() =
   option("--jdk", help="The location of the JDK")
 template javaImp(name:string) =
   let
-    appdir {.inject.} = if opts.appdir != "":
-        if not opts.appdir.dirExists: kill "Not a directory: " & opts.appdir
-        opts.appdir.absolutePath.normalizedPath
-      else:
+    singlejar {.inject.} = opts.appdir == ""
+    appdir {.inject.} = if singlejar:
         if not opts.jar.fileExists: kill "No --appdir defined and --jar is not properly set"
         opts.jar.parentDir.absolutePath.normalizedPath
-    singlejar {.inject.} = opts.appdir == ""
-    jar {.inject.} = getJar(opts.jar, appdir)
+      else:
+        if not opts.appdir.dirExists: kill "Not a directory: " & opts.appdir
+        opts.appdir.absolutePath.normalizedPath    
+    jar {.inject.} = getJar(if singlejar: opts.jar.extractFilename else:opts.jar, appdir)
     extra {.inject.} = opts.extra
     modules {.inject.} = if opts.modules == "" : "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets" else: opts.modules
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
@@ -172,6 +172,7 @@ Extras folder organization:
     javaOpt()
     option("--notarize", help="Notarize DMG application after creation, boolean value. Defaults to false")
     option("--instoutput", help="The output location of the installer files. Defaults to the same as --output")
+    flag("--nosign", help="Do not sign package")
     signOpt()
     sendOpt()
     keyfileOpt()
@@ -184,13 +185,15 @@ Extras folder organization:
       javaImp(name)
       keyfileImp()
       ostypeImp(false)
-      signImp(true, keyfile)
+      let sign = not opts.nosign
+      signImp(sign, keyfile)
       let notarize = opts.notarize.isTrue
+      if notarize and not sign: kill "Requested to notarize application but asked to skip signing"
       let instoutput = if opts.instoutput == "": output else: opts.instoutput
       sendImp(notarize)
       allImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
-      safedo: createPack(os, "", instoutput, output, true, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
+      safedo: createPack(os, "", instoutput, output, sign, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
         safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)
       exit()
@@ -213,10 +216,10 @@ Extras folder organization:
     commonOutOpt()
     infoOpt(false)
     resOpt()
+    flag("--nosign", help="Do not sign package")
     signOpt()
     option("--templ", help="The location of the template (e.g. DMG under macOS, Inno setup under Windows)")
     option("--target", help="The location of the application. When missing the system will try to scan the directory tree below this point")
-    flag("--nosign", help="Skp sign procedure")
     keyfileOpt()
     ostypeOpt()
     allOpt()
