@@ -62,7 +62,7 @@ template javaOpt() =
   resOpt()
   option("--extra", help="The location of extra files to added to the bundle. This is a hierarchical folder, where first level has the name of the target (as defined by system target) or special keywords \"windows\" for all Windows targets and \"common\" for all targets. Second level are all files that will be merged with the files located at appdir.")
   option("--modules", help="Comma separated list of required modules. Defaults to \"java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets\"")
-  option("--jvmopt", multiple=true, help="JVM option. Could be used more than once. If DEFAULTS are given, then the options \"-Dawt.useSystemAAFontSettings=on\" and \"-Dswing.aatext=true\" are added")
+  option("--jvmopt", multiple=true, help="JVM option. Could be used more than once.") # -Dawt.useSystemAAFontSettings=on -Dswing.aatext=true
   option("--id", help="Reverse URL unique identifier")
   option("--jdk", help="The location of the JDK")
 template javaImp(name:string) =
