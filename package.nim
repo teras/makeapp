@@ -1,5 +1,7 @@
 import myexec, nim_miniz, os, strutils, autos, sign, helper, types, sequtils, strformat
 
+const BACKGROUND_DMG = when system.hostOS == "macosx": "background.jpg".readFile else:""
+
 proc findDmgDestination(dest,appname:string): string =
   var found:seq[string]
   for (kind,file) in dest.walkDir(relative=true):
@@ -11,21 +13,54 @@ proc findDmgDestination(dest,appname:string): string =
         found.add(file)
   kill("Unable to locate application \"" & appname & "\", found: " & join(found, ", "))
 
-proc createDMGImpl(srcdmg, output_file, app:string, sign:bool, entitlements:string)=
+proc createDMGImpl(givenDmg, output_file, app, name:string, sign:bool, entitlements:string)=
   # Define destination mount point
   let volume = "/Volumes/" & randomFile().extractFilename
+  let isDmgCustom = not givenDmg.fileExists
+  let srcdmg = if isDmgCustom: randomFile() & ".dmg" else: givenDmg
 
   # Attach destination volume
   myexecQuiet "Detach old volume if any", "hdiutil", "detach", volume
-  myexec "Attach volume", "hdiutil", "attach", "-noautoopen", "-mountpoint", volume, srcdmg
+  if isDmgCustom:
+    myexec "Create new DMG file", "hdiutil", "create", "-volname", name, "-fs", "HFS+", "-size", "100M" , "-srcfolder", app, "-fsargs", "-c c=64,a=16,e=16", "-format", "UDRW", srcdmg
+  myexec "Attach volume", "hdiutil", "attach", "-readwrite", "-noverify", "-noautoopen", "-mountpoint", volume, srcdmg
   delegateLater(proc () =
     if volume.dirExists: myexec "Detach volume", "hdiutil", "detach", "-force", volume
   )
   let appdest = findDmgDestination(volume, app.extractFilename)
-  appdest.removeDir
-  appdest.createDir
-  info "Copy files"
-  merge appdest, app
+  if isDmgCustom:
+    createSymlink("/Applications", volume / "Applications")
+    let backgroundDir = volume / ".background"
+    backgroundDir.createDir
+    (backgroundDir / "background.jpg").writeFile BACKGROUND_DMG
+    let osascript = randomFile()
+    osascript.writeFile """
+      tell application "Finder"
+        tell disk """" & volume.extractFilename & """"
+          open
+          set current view of container window to icon view
+          set toolbar visible of container window to false
+          set statusbar visible of container window to false
+          set the bounds of container window to {400, 100, 820, 440}
+          set viewOptions to the icon view options of container window
+          set arrangement of viewOptions to not arranged
+          set icon size of viewOptions to 92
+          set background picture of viewOptions to file ".background:background.jpg"
+          set position of item """" & name & """.app" of container window to {95, 175}
+          set position of item "Applications" of container window to {330, 175}
+          close
+          open
+          update without registering applications
+          delay 2
+        end tell
+      end tell"""
+    myexec "Fix locations", "osascript", osascript
+    myexec "", "sync"
+  else:
+    appdest.removeDir
+    appdest.createDir
+    info "Copy files"
+    merge appdest, app
   if sign:
     sign(@[pMacos], appdest, entitlements, "", "", "")
   myexec "Detach volume", "hdiutil", "detach", "-force", volume
@@ -33,16 +68,18 @@ proc createDMGImpl(srcdmg, output_file, app:string, sign:bool, entitlements:stri
   if sign:
     sign(@[pMacos], output_file, entitlements, "", "", "")
 
-proc createMacosPack(dmg_template, output_file, app, res:string, sign:bool, entitlements: string) =
-  let dmg_template = checkParam(if dmg_template=="": res.resource("dmg_template.zip") else:dmg_template, "No " & res / "dmg_template.zip DMG template found")
-  let tempdir = randomDir()
-  info "Unzip template"
-  dmg_template.unzip(tempdir)
-  for kind,path in tempdir.walkDir:
-    if kind == pcFile and path.endsWith(".dmg"):
-      createDMGImpl(path, output_file, app, sign, entitlements)
-      return
-  kill("No DMG found in provided file")
+proc createMacosPack(dmg_template, output_file, app, name, res:string, sign:bool, entitlements: string) =
+  let dmg_template = if dmg_template=="": res.resource("dmg_template.zip") else:dmg_template
+  if dmg_template!="":
+    let tempdir = randomDir()
+    info "Unzip template"
+    dmg_template.unzip(tempdir)
+    for kind,path in tempdir.walkDir:
+      if kind == pcFile and path.endsWith(".dmg"):
+        createDMGImpl(path, output_file, app, name, sign, entitlements)
+        return
+    kill("No DMG found in provided file")
+  else: createDMGImpl("", output_file, app, name, sign, entitlements)
 
 proc constructISS(os:OSType, app, res, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
   let icon = res.resource("install.ico")
@@ -153,7 +190,7 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
     outdir.createDir
     info "Creating " & ($cos).capitalizeAscii & " installer"
     case cos:
-      of pMacos: createMacosPack(os_template, output_file, app, res, sign, entitlements)
+      of pMacos: createMacosPack(os_template, output_file, app, name, res, sign, entitlements)
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, res, name, version, descr, url, vendor, sign, assoc)
       of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, descr, cat, sign)
       of pGeneric: createGenericPack(output_file, app)
