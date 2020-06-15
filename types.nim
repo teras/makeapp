@@ -1,4 +1,4 @@
-import strutils, sequtils
+import strutils, sequtils, autos, os
 
 type OSType* = enum
   pMacos, pLinux64, pLinuxArm32, pLinuxArm64, pWin32, pWin64, pGeneric
@@ -8,14 +8,13 @@ type Assoc* = object
   description*: string
   mime*: string
 
+type Resource* = object
+  base*:string
+  gen*:string
+
 proc `$`*(ostype:OSType):string = system.`$`(ostype).substr(1).toLowerAscii
 
 proc typesList*():string = OSType.mapIt($it).join(", ")
-
-proc icon*(ostype:OSType, filename:string):string = return case ostype:
-  of pMacos: filename & ".icns"
-  of pWin32, pWin64: filename & ".ico"
-  of pLinux64, pLinuxArm32, pLinuxArm64, pGeneric: filename & ".png"
 
 proc appx*(ostype:OSType):string = return case ostype:
   of pMacos: "app"
@@ -44,3 +43,17 @@ proc bits*(ostype:OSType):int = return if ($ostype).contains("32"): 32 else: 64
 
 const linuxTargets* = @[pLinux64, pLinuxArm32, pLinuxArm64]
 const windowsTargets* = @[pWin32, pWin64]
+
+proc newResource*(base:string):Resource =
+  if base!="" and not base.dirExists: kill "Unable to locate directory " & base
+  Resource(base:base.absolutePath, gen:if base=="":"" else:randomDir())
+
+proc path*(resource:Resource, name:string):string =
+  if resource.base == "": return ""
+  let basepath = resource.base / name
+  if basepath.fileExists: return basepath
+  let genpath = resource.gen / name
+  if genpath.fileExists: return genpath
+  return ""
+
+proc exists*(resource:Resource, name:string):bool = resource.path(name) != ""

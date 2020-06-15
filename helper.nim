@@ -1,8 +1,24 @@
-import os, strutils, posix, autos, types, parsecfg
+import os, strutils, posix, autos, types, parsecfg, myexec
 
-proc resource*(resourcedir:string, resource:string):string =
-  let path = if resourcedir == "": resource else: resourcedir / resource
-  return if path.fileExists: path else: ""
+proc icon*(res:Resource, name:string, ostype:OSType):string =
+  let ext = case ostype:
+    of pMacos: "icns"
+    of pWin32, pWin64: "ico"
+    else: "png"
+  let given = res.path(name & "." & ext)
+  if given.fileExists: return given
+
+  let png = res.path(name & ".png")
+  if png=="": return ""
+  if windowsTargets.contains(ostype):
+    myexec "", "docker", "run", "--rm", "-v", res.base&":/root/res/base", "-v", res.gen&":/root/res/gen", "crossmob/appimage-builder", 
+      "convert", "/root/res/base/"&name&".png", "/root/res/gen/"&name&".ico"
+    return res.gen/name&".ico"
+  elif ostype == pMacos:
+    myexec "", "docker", "run", "--rm", "-v", res.base&":/root/res/base", "-v", res.gen&":/root/res/gen", "crossmob/appimage-builder", 
+      "png2icns", "/root/res/gen/"&name&".icns", "/root/res/base/"&name&".png"
+    return res.gen/name&".icns"
+  return ""
 
 proc findPlist*(base:string) : string =
   for file in walkDirRec(base):

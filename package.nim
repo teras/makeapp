@@ -68,8 +68,8 @@ proc createDMGImpl(givenDmg, output_file, app, name:string, sign:bool, entitleme
   if sign:
     sign(@[pMacos], output_file, entitlements, "", "", "")
 
-proc createMacosPack(dmg_template, output_file, app, name, res:string, sign:bool, entitlements: string) =
-  let dmg_template = if dmg_template=="": res.resource("dmg_template.zip") else:dmg_template
+proc createMacosPack(dmg_template, output_file, app, name:string, res:Resource, sign:bool, entitlements: string) =
+  let dmg_template = if dmg_template=="": res.path("dmg_template.zip") else:dmg_template
   if dmg_template!="":
     let tempdir = randomDir()
     info "Unzip template"
@@ -81,10 +81,10 @@ proc createMacosPack(dmg_template, output_file, app, name, res:string, sign:bool
     kill("No DMG found in provided file")
   else: createDMGImpl("", output_file, app, name, sign, entitlements)
 
-proc constructISS(os:OSType, app, res, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
-  let icon = res.resource("install.ico")
-  let logo_install = res.resource("logo-install.bmp")
-  let logo_small = @[res.resource("logo-install-small.bmp"),res.resource("logo-install-small@2x.bmp")].filter(proc (a:string):bool=a!="")
+proc constructISS(os:OSType, app:string, res:Resource, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
+  let icon = res.icon("install", os)
+  let logo_install = res.path("logo-install.bmp")
+  let logo_small = @[res.path("logo-install-small.bmp"),res.path("logo-install-small@2x.bmp")].filter(proc (a:string):bool=a!="")
 
   var iss = """#define AppName """" & name & """"
 #define AppUrl """" & url & """"
@@ -138,14 +138,14 @@ Source:"app\*"; DestDir:"{app}"; Flags: recursesubdirs
       Root: HKCR; Subkey: """" & key & """";                    ValueData: """" & descr & """"; Flags: uninsdeletekey; ValueType: string; ValueName: ""
       Root: HKCR; Subkey: """" & key & """\shell\open\command"; ValueData: """ & "\"" & """""{app}\{#AppName}.exe"" ""%1""" & "\"" & """"";        ValueType: string; ValueName: ""
   """
-      let aicon = res.resource(os.icon(a.extension))
+      let aicon = res.icon(a.extension, os)
       if aicon.fileExists:
         copyFile aicon, associco / aicon.extractFilename
         iss.add """    Root: HKCR; Subkey: """" & key & """\DefaultIcon";        ValueData: "{app}\associco\""" & aicon.extractFilename & """,0";               ValueType: string; ValueName: ""
   """
   return iss
 
-proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, res, name, version, descr, url, vendor:string, sign:bool, associations:seq[Assoc]) =
+proc createWindowsPack(os:OSType, os_template, output_file, app, p12file:string, res:Resource, name, version, descr, url, vendor:string, sign:bool, associations:seq[Assoc]) =
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
@@ -154,7 +154,7 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, res, n
   if sign:
     sign(@[os], output_file, "", p12file, name, url)
 
-proc createLinuxPack(os:OSType, output_file, gpgdir, res, app, name, descr, cat:string, sign:bool) =
+proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, descr, cat:string, sign:bool) =
   let inst_res = randomDir()
   let cname = name.toLowerAscii
   var desktop = fmt"""[Desktop Entry]
@@ -164,10 +164,10 @@ Exec={cname} %u
 Categories={cat}
 Comment={descr}
 """
-  let icon = res.resource("app.png")
+  let icon = res.icon("app", os)
   if icon.fileExists:
     copyFile icon, app / cname&".png"
-    desktop.add &"Icon={cname}\n"
+    desktop.add "Icon=" & cname & "\n"
   writeFile app / cname&".desktop", desktop
   let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
   let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGPASS & "' `mktemp` ; "
@@ -178,7 +178,7 @@ Comment={descr}
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
 
-proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, gpgdir, res, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
+proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
       app = checkParam(findApp(cos, if app != "": app else: getCurrentDir()), "No Application." & cos.appx & " found under " & (if app != "": app else: getCurrentDir()))

@@ -34,9 +34,7 @@ template resOpt() = option("--res", help="The location of the resources files, n
 template nameresImp() =
   let
     name {.inject.} = checkParam(opts.name.strip, "No application name provided")
-    res {.inject.} = when compiles(opts.res):
-      if opts.res == "": "" else: checkParam(opts.res, "Unable to locate directory " & opts.res, asDir=true)
-      else: ""
+    res {.inject.} = when compiles(opts.res): newResource(opts.res) else: newResource("")
     url {.inject.} = opts.url
 
 template infoOpt(baseonly:bool) =
@@ -48,7 +46,7 @@ template infoOpt(baseonly:bool) =
     option("--vendor", help="The vendor of the package")
     option("--assoc", multiple=true, help="File associations with this application. Format is EXT:MIMETYPE:DESCRIPTION. Only the EXT part is required. All other parts could be missing. To provide a custom icon, under resource folder use an file named as \"EXT.icns\". Usage example: \"ass:text/x-ssa:ASS Subtitle file\"")
   option("--url", help="Product URL")
-template infoImp(res:string) =
+template infoImp(res:Resource) =
   let
     version {.inject.} = if opts.version == "" : "1.0" else: opts.version
     descr {.inject.} = if opts.descr == "" : opts.name else: opts.descr
@@ -136,6 +134,10 @@ Environmental variables:
     SIGN_GPG_PASS         : The password of the GnuPG file
 
 Default resources:
+  All targets:
+    app.png          : The application icon
+    [ASSOC].png      : The file association icons for file extensions ASSOC. E.g. for an association of ".txt" files, the filename should be "txt.png"
+  
   macOS specific: 
     app.icns         : The application icon
     dmg_template.zip : The application DMG template
@@ -166,37 +168,6 @@ Extras folder organization:
      
       """
       exit(true)
-  command("create"):
-    commonOutOpt()
-    infoOpt(false)
-    javaOpt()
-    option("--notarize", help="Notarize DMG application after creation, boolean value. Defaults to false")
-    option("--instoutput", help="The output location of the installer files. Defaults to the same as --output")
-    flag("--nosign", help="Do not sign package")
-    signOpt()
-    sendOpt()
-    keyfileOpt()
-    ostypeOpt()
-    allOpt()
-    run:
-      commonOutImp()
-      nameresImp()
-      infoImp(res)
-      javaImp(name)
-      keyfileImp()
-      ostypeImp(false)
-      let sign = not opts.nosign
-      signImp(sign, keyfile)
-      let notarize = opts.notarize.isTrue
-      if notarize and not sign: kill "Requested to notarize application but asked to skip signing"
-      let instoutput = if opts.instoutput == "": output else: opts.instoutput
-      sendImp(notarize)
-      allImp()
-      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
-      safedo: createPack(os, "", instoutput, output, sign, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
-      if notarize:
-        safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)
-      exit()
   command("java"):
     commonOutOpt()
     infoOpt(false)
@@ -269,6 +240,37 @@ Extras folder organization:
         if fileToSend == "":kill("No target file found")
         safedo: sendToApple(id, fileToSend, ascprovider)
         exit()
+  command("create"):
+    commonOutOpt()
+    infoOpt(false)
+    javaOpt()
+    option("--notarize", help="Notarize DMG application after creation, boolean value. Defaults to false")
+    option("--instoutput", help="The output location of the installer files. Defaults to the same as --output")
+    flag("--nosign", help="Do not sign package")
+    signOpt()
+    sendOpt()
+    keyfileOpt()
+    ostypeOpt()
+    allOpt()
+    run:
+      commonOutImp()
+      nameresImp()
+      infoImp(res)
+      javaImp(name)
+      keyfileImp()
+      ostypeImp(false)
+      let sign = not opts.nosign
+      signImp(sign, keyfile)
+      let notarize = opts.notarize.isTrue
+      if notarize and not sign: kill "Requested to notarize application but asked to skip signing"
+      let instoutput = if opts.instoutput == "": output else: opts.instoutput
+      sendImp(notarize)
+      allImp()
+      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
+      safedo: createPack(os, "", instoutput, output, sign, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
+      if notarize:
+        safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)
+      exit()
 p.run(commandLineParams())
 stdout.write(p.help)
 kill("No options given")

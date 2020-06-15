@@ -1,18 +1,18 @@
 import strutils, sequtils, os, autos, myexec, helper, types
 
-proc getAssocDef(resources:string, ostype:OSType, assoc:Assoc): string =
-  var res:string
+proc getAssocDef(res:Resource, ostype:OSType, assoc:Assoc): string =
+  var def:string
   proc addIf(label:string, value:string) =
     if value != "":
-      res.add label
-      res.add "="
-      res.add value
-      res.add "\n"
+      def.add label
+      def.add "="
+      def.add value
+      def.add "\n"
   "extension".addIf assoc.extension
   "mime-type".addIf assoc.mime
   "description".addIf assoc.description
-  "icon".addIf res.resource(ostype.icon(assoc.extension))
-  return res
+  "icon".addIf res.icon(assoc.extension, ostype)
+  return def
 
 proc findOS*(list:string):seq[OSType] =
   var os:seq[OSType]
@@ -53,7 +53,7 @@ proc findOS*(list:string):seq[OSType] =
 template idx(params:seq[string], idx:int):string =
   if idx>=params.len: "" else: params[idx]
 
-proc findAccociations*(assoc:seq[string], res:string): seq[Assoc] =
+proc findAccociations*(assoc:seq[string], res:Resource): seq[Assoc] =
   for entry in assoc:
     let parts = entry.split(':')
     if parts.len > 3: kill "Too many parameters when defining associations"
@@ -94,7 +94,7 @@ proc copyAppFiles(appdir, dest, jar:string, singlejar:bool):string =
     merge dest, appdir
     return jar
 
-proc makeWindows(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
+proc makeWindows(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
   let bits = ostype.bits
@@ -120,7 +120,7 @@ proc makeWindows(output:string, resources:string, name:string, version:string, a
   return dest
 
 # https://bugs.launchpad.net/qemu/+bug/1805913
-proc makeLinux(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
+proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
   let dest = output / name & "." & ostype.appx
@@ -140,7 +140,7 @@ proc makeLinux(output:string, resources:string, name:string, version:string, app
     "--no-man-pages", "--compress=1"
   return dest
 
-proc makeMacos(output:string, resources:string, name:string, version:string, appdir:string, jar:string,
+proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool):string =
   when system.hostOS != "macosx": kill "Create of a macOS package is supported only under macOS itself"
@@ -159,7 +159,7 @@ proc makeMacos(output:string, resources:string, name:string, version:string, app
       "--mac-package-identifier", identifier, "--mac-package-name", name]
   for assoc in associations:
     args.add "--file-associations"
-    args.add randomFile(getAssocDef(resources, pMacos, assoc))
+    args.add randomFile(getAssocDef(res, pMacos, assoc))
   for jvmopt in jvmopts:
     args.add "--java-options"
     args.add jvmopt
@@ -204,17 +204,17 @@ proc copyExtraFiles(app:string, extra:string, ostype:OSType) =
   let current = extra / osname
   if current.dirExists: merge(app, current)
 
-proc makeJava*(os:seq[OSType], output, resources, name, version, appdir, jar, modules:string, jvmopts:seq[string],
+proc makeJava*(os:seq[OSType], output:string, res:Resource, name, version, appdir, jar, modules:string, jvmopts:seq[string],
     associations:seq[Assoc], extra, vendor, description, identifier, url, jdkhome:string, singlejar:bool) =
   let
     jdkhome = if jdkhome == "": getEnv("JAVA_HOME") else: jdkhome
     extra = extra.absolutePath
     splash = "" #resources.resource("splash.png")
   for cos in os:
-    let icon = resources.resource(cos.icon("app"))
+    let icon = res.icon("app", cos)
     let appout = case cos:
-      of pMacos: makeMacos(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar)
-      of pWin32, pWin64: makeWindows(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
-      of pLinux64, pLinuxArm32, pLinuxArm64: makeLinux(output, resources, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
+      of pMacos: makeMacos(output, res, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar)
+      of pWin32, pWin64: makeWindows(output, res, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
+      of pLinux64, pLinuxArm32, pLinuxArm64: makeLinux(output, res, name, version, appdir, jar, modules, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
       of pGeneric: makeGeneric(output, name, version, appdir, jar, singlejar)
     if extra != "": copyExtraFiles(appout, extra, cos)
