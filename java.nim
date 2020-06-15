@@ -179,12 +179,15 @@ proc makeGeneric(output, name, version, appdir, jar:string, singlejar:bool):stri
   let dest = output / cname & "-" & version & "." & pGeneric.appx
   let jar = copyAppFiles(appdir, dest, jar, singlejar)
   let launcherfile = dest / cname
-  let launcher = """
+  writeFile dest / cname & ".bat", """
+@ECHO OFF
+java -jar """" & jar & """"
+"""
+  writeFile launcherfile, """
 #!/bin/sh
 cd "`dirname \"$0\"`"
 java -jar """" & jar & """"
 """
-  writeFile launcherfile, launcher
   launcherfile.setFilePermissions({fpUserExec, fpUserRead, fpUserWrite, fpGroupExec, fpGroupRead, fpOthersExec, fpOthersRead})
   return dest
 
