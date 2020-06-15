@@ -74,7 +74,7 @@ template javaImp(name:string) =
         opts.appdir.absolutePath.normalizedPath    
     jar {.inject.} = getJar(if singlejar: opts.jar.extractFilename else:opts.jar, appdir)
     extra {.inject.} = opts.extra
-    modules {.inject.} = if opts.modules == "" : "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets" else: opts.modules
+    modules {.inject.} = opts.modules
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
     id {.inject.} = if opts.id == "": constructId(findUsername(), name) else: opts.id
     jdk {.inject.} = opts.jdk

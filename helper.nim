@@ -85,3 +85,5 @@ proc merge*(basedir:string, otherdir:string) =
       copyFileWithPermissions src, dest
     else:
       kill("Unknown file at " & src)
+
+proc safe*(name:string):string {.inline.}= name.replace(' ','_')

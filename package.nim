@@ -156,7 +156,7 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file:string,
 
 proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, descr, cat:string, sign:bool) =
   let inst_res = randomDir()
-  let cname = name.toLowerAscii
+  let cname = name.toLowerAscii.safe
   var desktop = fmt"""[Desktop Entry]
 Type=Application
 Name={name}
@@ -172,8 +172,8 @@ Comment={descr}
   let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
   let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGPASS & "' `mktemp` ; "
   myexec "", "docker", "run", "-t", "--rm", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder", "bash", "-c", 
-    signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name & ".appimage"
-  moveFile inst_res / name & ".appimage", output_file
+    signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage"
+  moveFile inst_res / name.safe & ".appimage", output_file
 
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
@@ -186,7 +186,7 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
         let fname = app.extractFilename
         fname.substr(0,fname.len - cos.appx.len-2)
       outdir = if outdir == "": getCurrentDir() else: outdir.absolutePath
-      output_file = outdir / name & "-" & version & "." & cos.packx
+      output_file = outdir / name.safe & "-" & version & "." & cos.packx
     outdir.createDir
     info "Creating " & ($cos).capitalizeAscii & " installer"
     case cos:

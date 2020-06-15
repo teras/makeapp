@@ -1,5 +1,7 @@
 import strutils, sequtils, os, autos, myexec, helper, types
 
+const DEF_MODULES = "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets"
+
 proc getAssocDef(res:Resource, ostype:OSType, assoc:Assoc): string =
   var def:string
   proc addIf(label:string, value:string) =
@@ -106,6 +108,7 @@ proc makeWindows(output:string, res:Resource, name:string, version:string, appdi
   let longversion = "1.0.0.0"
   let execOut = randomDir()
   if icon != "": copyFile(icon, execOut / "appicon.ico")
+  let modules = if modules=="": DEF_MODULES else: modules
   myexec "Create " & $ostype & " executable", "docker", "run", "--rm", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/windows -d:mingw -d:APPNAME=\"" & name & "\"" &
       " -d:COMPANY=\"" & vendor & "\" -d:DESCRIPTION=\"" & description & "\" -d:APPVERSION=" & version &
@@ -123,9 +126,10 @@ proc makeWindows(output:string, res:Resource, name:string, version:string, appdi
 proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
-  let dest = output / name & "." & ostype.appx
+  let dest = output / name.safe & "." & ostype.appx
   let jar = copyAppFiles(appdir, dest, jar, singlejar)
   let execOut = randomDir()
+  let modules = if modules=="": DEF_MODULES else: modules
   let imageFlavour = if ostype==pLinuxArm32: "armv7l-centos-jdk-14.0.1_7-slim"
     elif ostype==pLinuxArm64: "aarch64-centos-jdk-14.0.1_7-slim"
     else: "x86_64-centos-jdk-14.0.1_7-slim"
@@ -153,6 +157,7 @@ proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:
       copyFile(appdir / jar, cdir / jar)
       cdir
     else: appdir
+  let modules = if modules=="": DEF_MODULES else: modules
   var args = @[jpackage, "--app-version", version, "--name", name, "--input", inputdir, "--add-modules", modules,
       "--main-jar", jar, "--dest", output, "--type", "app-image",
       "--copyright", "(C) "&vendor, "--description", description, "--vendor", vendor,
@@ -178,17 +183,17 @@ proc makeGeneric(output, name, version, appdir, jar:string, singlejar:bool):stri
   let cname = name.toLowerAscii
   let dest = output / cname & "-" & version & "." & pGeneric.appx
   let jar = copyAppFiles(appdir, dest, jar, singlejar)
-  let launcherfile = dest / cname
-  writeFile dest / cname & ".bat", """
-@ECHO OFF
-java -jar """" & jar & """"
-"""
+  let launcherfile = dest / cname.safe
   writeFile launcherfile, """
 #!/bin/sh
 cd "`dirname \"$0\"`"
 java -jar """" & jar & """"
 """
   launcherfile.setFilePermissions({fpUserExec, fpUserRead, fpUserWrite, fpGroupExec, fpGroupRead, fpOthersExec, fpOthersRead})
+  writeFile dest / cname & ".bat", """
+@ECHO OFF
+java -jar """" & jar & """"
+"""
   return dest
 
 proc copyExtraFiles(app:string, extra:string, ostype:OSType) =
