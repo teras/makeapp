@@ -22,7 +22,8 @@ proc createDMGImpl(givenDmg, output_file, app, name:string, sign:bool, entitleme
   # Attach destination volume
   myexecQuiet "Detach old volume if any", "hdiutil", "detach", volume
   if isDmgCustom:
-    myexec "Create new DMG file", "hdiutil", "create", "-volname", name, "-fs", "HFS+", "-size", "100M" , "-srcfolder", app, "-fsargs", "-c c=64,a=16,e=16", "-format", "UDRW", srcdmg
+    let size = myexec("", "du", "-sk", app).splitWhitespace[0].parseInt + 1000
+    myexec "Create new DMG file", "hdiutil", "create", "-volname", name, "-fs", "HFS+", "-size", $size&"k" , "-srcfolder", app, "-fsargs", "-c c=64,a=16,e=16", "-format", "UDRW", srcdmg
   myexec "Attach volume", "hdiutil", "attach", "-readwrite", "-noverify", "-noautoopen", "-mountpoint", volume, srcdmg
   delegateLater(proc () =
     if volume.dirExists: myexec "Detach volume", "hdiutil", "detach", "-force", volume
