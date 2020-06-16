@@ -51,7 +51,7 @@ template infoImp(res:Resource) =
     version {.inject.} = if opts.version == "" : "1.0" else: opts.version
     descr {.inject.} = if opts.descr == "" : opts.name else: opts.descr
     assoc {.inject.} = findAccociations(opts.assoc, res)
-    vendor {.inject.} = if opts.vendor == "": findUsername().capitalizeAscii else: opts.vendor
+    vendor {.inject.} = if opts.vendor == "": "Company" else: opts.vendor
     cat {.inject.} = opts.cat
 
 template javaOpt() =
@@ -76,7 +76,7 @@ template javaImp(name:string) =
     extra {.inject.} = opts.extra
     modules {.inject.} = opts.modules
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
-    id {.inject.} = if opts.id == "": constructId(findUsername(), name) else: opts.id
+    id {.inject.} = if opts.id == "": constructId(url,vendor, name) else: opts.id
     jdk {.inject.} = opts.jdk
 
 template signOpt() =
@@ -177,8 +177,8 @@ Extras folder organization:
     run:
       commonOutImp()
       nameresImp()
-      javaImp(name)
       infoImp(res)
+      javaImp(name)
       ostypeImp(false)
       allImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)

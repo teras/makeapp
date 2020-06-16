@@ -1,4 +1,4 @@
-import strutils, sequtils, os, autos, myexec, helper, types
+import strutils, sequtils, os, autos, myexec, helper, types, uri, algorithm
 
 const DEF_MODULES = "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets"
 
@@ -84,7 +84,15 @@ proc getJvmOpts*(opts:seq[string]): seq[string] =
     else:
       result.add opt
 
-proc constructId*(username:string, name:string): string = "app." & username.toLowerAscii & "." & name.splitWhitespace.join.toLowerAscii
+proc constructId*(url,vendor,name:string): string =
+  proc norm(name:string):string {.inline.} = name.splitWhitespace.join.toLowerAscii
+  if url == "":
+    return "app." & vendor.norm & "." & name.norm
+  else:
+    var parts = url.parseUri.hostname.split(".")
+    echo parts
+    if parts.len>0 and parts[0]=="www": parts.delete(0)
+    return parts.reversed.join(".") & "." & name.norm
 
 proc copyAppFiles(appdir, dest, jar:string, singlejar:bool):string =
   if singlejar:

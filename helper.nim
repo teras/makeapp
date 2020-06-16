@@ -47,12 +47,6 @@ proc findApp*(ostype:OSType, base:string) : string =
       return file
   return ""
 
-proc findUsername*(): string =
-  let userC = getlogin()
-  let len = userC.high+1
-  result = newString(len)
-  copyMem(addr(result[0]), userC, len)
-
 proc isTrue*(val:string): bool =
   let val = val.strip.toLowerAscii
   return val == "1" or val.startsWith("t") or val.startsWith("y")
