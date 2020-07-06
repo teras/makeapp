@@ -127,7 +127,7 @@ proc makeWindows(output:string, res:Resource, name:string, version:string, appdi
   copyFile(execOut / exec, dest / exec)
   myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdkwin", "wine" & $bits,
     "/java/win" & $bits & "/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/runtime", "--no-header-files",
-    "--no-man-pages", "--compress=1"
+    "--no-man-pages", "--compress=2", "--strip-debug"
   return dest
 
 # https://bugs.launchpad.net/qemu/+bug/1805913
@@ -143,13 +143,14 @@ proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:
     else: "x86_64-centos-jdk-14.0.1_7-slim"
   let compileFlags = if ostype==pLinuxArm32: "--cpu:arm --os:linux" elif ostype==pLinuxArm64: "--cpu:arm64 --os:linux" else: ""
   let strip = if ostype==pLinuxArm32: "arm-linux-gnueabi-strip" elif ostype==pLinuxArm64: "aarch64-linux-gnu-strip" else: "strip"
+  let striptype = if ostype==pLinuxArm32 or ostype==pLinuxArm64: "--strip-java-debug-attributes" else:"--strip-debug"
   myexec "Create " & $ostype & " executable", "docker", "run", "--rm", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" & jar & 
       " -o:target/AppRun javalauncher ; " & strip & " target/AppRun"
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
   myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "adoptopenjdk/openjdk14:" & imageFlavour, 
     "jlink", "--add-modules", modules, "--output", "/usr/src/myapp/runtime", "--no-header-files",
-    "--no-man-pages", "--compress=1"
+    "--no-man-pages", "--compress=2", striptype
   return dest
 
 proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,

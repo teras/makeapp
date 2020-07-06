@@ -1,4 +1,4 @@
-import os, strutils, posix, autos, types, parsecfg, myexec
+import os, strutils, autos, types, parsecfg, myexec
 
 proc icon*(res:Resource, name:string, ostype:OSType):string =
   let ext = case ostype:
