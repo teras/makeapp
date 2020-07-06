@@ -1,4 +1,4 @@
-import strutils, sequtils, os, autos, myexec, helper, types, uri, algorithm
+import strutils, sequtils, os, autos, myexec, helper, types, uri, algorithm, mactemplate
 
 const DEF_MODULES = "java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets"
 
@@ -54,6 +54,8 @@ proc findOS*(list:string):seq[OSType] =
 
 template idx(params:seq[string], idx:int):string =
   if idx>=params.len: "" else: params[idx]
+
+template makeExec(file:string) = file.setFilePermissions({fpUserExec, fpUserRead, fpUserWrite, fpGroupExec, fpGroupRead, fpOthersExec, fpOthersRead})
 
 proc findAccociations*(assoc:seq[string], res:Resource): seq[Assoc] =
   for entry in assoc:
@@ -156,37 +158,60 @@ proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:
 proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
     modules:string, jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool):string =
-  when system.hostOS != "macosx": kill "Create of a macOS package is supported only under macOS itself"
-  let jpackage = if jdkhome == "": "jpackage" else:
-    let possible = jdkhome / "bin" / "jpackage"
-    if not possible.fileExists: kill "Unable to locate jpackage using JAVA_HOME " & jdkhome
-    possible
-  let inputdir = if singlejar:
-      let cdir = randomDir()
-      copyFile(appdir / jar, cdir / jar)
-      cdir
-    else: appdir
   let modules = if modules=="": DEF_MODULES else: modules
-  var args = @[jpackage, "--app-version", version, "--name", name, "--input", inputdir, "--add-modules", modules,
-      "--main-jar", jar, "--dest", output, "--type", "app-image",
-      "--copyright", "(C) "&vendor, "--description", description, "--vendor", vendor,
-      "--mac-package-identifier", identifier, "--mac-package-name", name]
-  for assoc in associations:
-    args.add "--file-associations"
-    args.add randomFile(getAssocDef(res, pMacos, assoc))
-  for jvmopt in jvmopts:
-    args.add "--java-options"
-    args.add jvmopt
-  if splash != "":
-    args.add "--java-options"
-    args.add "-splash:$APPDIR/" & splash
-  if icon != "":
-    args.add "--icon"
-    args.add icon
-  myexec "Use jpackage to create Java package", args
-  let app = output / name & "." & pMacos.appx
-  (app & "/Contents/runtime/Contents/MacOS").removeDir(true)
-  return app & "/Contents/app"
+  if singlejar:
+    let dest = output / name & "." & pMacos.appx
+    let contents = dest/"Contents"
+    let macos = contents/"MacOS"
+    let resources = contents/"Resources"
+    contents.createDir
+    macos.createDir
+    resources.createDir
+
+    discard copyAppFiles(appdir, contents, jar, singlejar)
+    (contents/"app"/name&".cfg").writeFile getCfg(name,version,identifier,jar,appdir)
+    (contents/"PkgInfo").writeFile "APPL????"
+    (contents/"Info.plist").writeFile getInfoPlist(name,identifier,version,"(C) "&vendor)
+    if icon.fileExists: icon.copyFile(resources/name&".icns")
+    let exec = macos/name
+    exec.writeFile LAUNCHER
+    exec.makeExec
+    (macos/"libapplauncher.dylib").writeFile APPLAUNCHERLIB
+    myexec "", "jlink", "--add-modules", modules, "--output", contents/"runtime"/"Contents"/"Home", "--no-header-files",
+      "--no-man-pages", "--compress=2", "--strip-debug"
+    (contents/"runtime"/"Contents"/"Home"/"bin").removeDir
+    return contents/"app"
+  else:
+    when system.hostOS != "macosx": kill "Create of a macOS package is supported only under macOS itself"
+    let jpackage = if jdkhome == "": "jpackage" else:
+      let possible = jdkhome / "bin" / "jpackage"
+      if not possible.fileExists: kill "Unable to locate jpackage using JAVA_HOME " & jdkhome
+      possible
+    let inputdir = if singlejar:
+        let cdir = randomDir()
+        copyFile(appdir / jar, cdir / jar)
+        cdir
+      else: appdir
+    var args = @[jpackage, "--app-version", version, "--name", name, "--input", inputdir, "--add-modules", modules,
+        "--main-jar", jar, "--dest", output, "--type", "app-image",
+        "--copyright", "(C) "&vendor, "--description", description, "--vendor", vendor,
+        "--mac-package-identifier", identifier, "--mac-package-name", name]
+    for assoc in associations:
+      args.add "--file-associations"
+      args.add randomFile(getAssocDef(res, pMacos, assoc))
+    for jvmopt in jvmopts:
+      args.add "--java-options"
+      args.add jvmopt
+    if splash != "":
+      args.add "--java-options"
+      args.add "-splash:$APPDIR/" & splash
+    if icon != "":
+      args.add "--icon"
+      args.add icon
+    myexec "Use jpackage to create Java package", args
+    let app = output / name & "." & pMacos.appx
+    (app & "/Contents/runtime/Contents/MacOS").removeDir(true)
+    return app & "/Contents/app"
 
 proc makeGeneric(output, name, version, appdir, jar:string, singlejar:bool):string =
   let cname = name.toLowerAscii
@@ -198,7 +223,7 @@ proc makeGeneric(output, name, version, appdir, jar:string, singlejar:bool):stri
 cd "`dirname \"$0\"`"
 java -jar """" & jar & """"
 """
-  launcherfile.setFilePermissions({fpUserExec, fpUserRead, fpUserWrite, fpGroupExec, fpGroupRead, fpOthersExec, fpOthersRead})
+  launcherfile.makeExec
   writeFile dest / cname & ".bat", """
 @ECHO OFF
 start javaw -jar """" & jar & """"
