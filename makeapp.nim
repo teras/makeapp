@@ -71,7 +71,7 @@ template javaImp(name:string) =
         opts.jar.parentDir.absolutePath.normalizedPath
       else:
         if not opts.appdir.dirExists: kill "Not a directory: " & opts.appdir
-        opts.appdir.absolutePath.normalizedPath    
+        opts.appdir.absolutePath.normalizedPath
     jar {.inject.} = getJar(if singlejar: opts.jar.extractFilename else:opts.jar, appdir)
     extra {.inject.} = opts.extra
     modules {.inject.} = opts.modules

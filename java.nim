@@ -201,7 +201,7 @@ java -jar """" & jar & """"
   launcherfile.setFilePermissions({fpUserExec, fpUserRead, fpUserWrite, fpGroupExec, fpGroupRead, fpOthersExec, fpOthersRead})
   writeFile dest / cname & ".bat", """
 @ECHO OFF
-java -jar """" & jar & """"
+start javaw -jar """" & jar & """"
 """
   return dest
 
