@@ -33,7 +33,7 @@ proc cpu*(ostype:OSType):string = return case ostype:
   of pGeneric: "any"
 
 proc packx*(ostype:OSType):string = return case ostype:
-  of pMacos: "dmg"
+  of pMacos: (when defined(macosx):"dmg" else:"zip")
   of pWin64: "x64.exe"
   of pWin32: "x32.exe"
   of pLinux64, pLinuxArm32, pLinuxArm64: ostype.cpu & ".appimage"

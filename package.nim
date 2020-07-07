@@ -70,17 +70,23 @@ proc createDMGImpl(givenDmg, output_file, app, name:string, sign:bool, entitleme
     sign(@[pMacos], output_file, entitlements, "", "", "")
 
 proc createMacosPack(dmg_template, output_file, app, name:string, res:Resource, sign:bool, entitlements: string) =
-  let dmg_template = if dmg_template=="": res.path("dmg_template.zip") else:dmg_template
-  if dmg_template!="":
-    let tempdir = randomDir()
-    info "Unzip template"
-    dmg_template.unzip(tempdir)
-    for kind,path in tempdir.walkDir:
-      if kind == pcFile and path.endsWith(".dmg"):
-        createDMGImpl(path, output_file, app, name, sign, entitlements)
-        return
-    kill("No DMG found in provided file")
-  else: createDMGImpl("", output_file, app, name, sign, entitlements)
+  when defined(macosx):
+    let dmg_template = if dmg_template=="": res.path("dmg_template.zip") else:dmg_template
+    if dmg_template!="":
+      let tempdir = randomDir()
+      info "Unzip template"
+      dmg_template.unzip(tempdir)
+      for kind,path in tempdir.walkDir:
+        if kind == pcFile and path.endsWith(".dmg"):
+          createDMGImpl(path, output_file, app, name, sign, entitlements)
+          return
+      kill("No DMG found in provided file")
+    else: createDMGImpl("", output_file, app, name, sign, entitlements)
+  else:
+    myexec "Create "&output_file.extractFilename, "docker", "run", "--rm",
+      "-v", app.parentDir&":/usr/src/app/src",
+      "-v", output_file.parentDir&":/usr/src/app/dest",
+      "crossmob/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
 
 proc constructISS(os:OSType, app:string, res:Resource, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
   let icon = res.icon("install", os)

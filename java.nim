@@ -92,7 +92,6 @@ proc constructId*(url,vendor,name:string): string =
     return "app." & vendor.norm & "." & name.norm
   else:
     var parts = url.parseUri.hostname.split(".")
-    echo parts
     if parts.len>0 and parts[0]=="www": parts.delete(0)
     return parts.reversed.join(".") & "." & name.norm
 
@@ -160,6 +159,10 @@ proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:
     vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool):string =
   let modules = if modules=="": DEF_MODULES else: modules
   if singlejar:
+    let jlink = if jdkhome == "": "jpackage" else:
+      let possible = jdkhome / "bin" / "jlink"
+      if not possible.fileExists: kill "Unable to locate jlink using JAVA_HOME " & jdkhome
+      possible
     let dest = output / name & "." & pMacos.appx
     let contents = dest/"Contents"
     let macos = contents/"MacOS"
@@ -177,7 +180,7 @@ proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:
     exec.writeFile LAUNCHER
     exec.makeExec
     (macos/"libapplauncher.dylib").writeFile APPLAUNCHERLIB
-    myexec "", "jlink", "--add-modules", modules, "--output", contents/"runtime"/"Contents"/"Home", "--no-header-files",
+    myexec "", jlink, "--add-modules", modules, "--output", contents/"runtime"/"Contents"/"Home", "--no-header-files",
       "--no-man-pages", "--compress=2", "--strip-debug"
     (contents/"runtime"/"Contents"/"Home"/"bin").removeDir
     return contents/"app"
