@@ -69,7 +69,7 @@ proc findMainClass(jar:string):string =
   if not zip.open(jar): kill "Error while opening JAR file " & jar
   for i, fname in zip:
     if fname == "META-INF/MANIFEST.MF":
-      manifest = parseManifest(zip.extract_file_to_string(fname))
+      manifest = parseManifest(zip.extract_file(fname, randomDir()).readFile)
   zip.close()
   return manifest["main-class"]
 
