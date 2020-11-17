@@ -156,7 +156,7 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file:string,
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
-  myexec "", "docker", "run", "--rm", "-v", inst_res&":/work", "-v", app&":/work/app", "amake/innosetup", "installer.iss"
+  docker "", "-v", inst_res&":/work", "-v", app&":/work/app", "amake/innosetup", "installer.iss"
   moveFile inst_res / name & ".exe", output_file
   if sign:
     sign(@[os], output_file, "", p12file, name, url)
@@ -178,8 +178,10 @@ Comment={descr}
   writeFile app / cname&".desktop", desktop
   let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
   let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGPASS & "' `mktemp` ; "
-  myexec "", "docker", "run", "-t", "--rm", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder", "bash", "-c", 
-    signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage"
+  docker "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder",
+    "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
+    " ; chown " & UG_ID & " " & name.safe & ".appimage"
+
   moveFile inst_res / name.safe & ".appimage", output_file
 
 proc createGenericPack(output_file, app:string) =

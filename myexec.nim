@@ -1,10 +1,13 @@
-import strutils, osproc, autos
+import strutils, osproc, autos, sequtils, posix
 
 var USER*:string
 var PASSWORD*:string
 var ID*:string
 var P12PASS*:string
 var GPGPASS*:string
+
+let UG_ID* = when defined(windows): "1000:1000"
+  else: $getuid() & ":" & $getgid()
 
 proc convert(cmd:varargs[string]):string =
   var first = true
@@ -39,3 +42,7 @@ proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool):string =
 proc myexecQuiet*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, cmd, true)
 
 proc myexec*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, cmd, false)
+
+proc docker*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, concat(@["docker", "run", "--rm"], @cmd), false)
+
+proc dockeru*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, concat(@["docker", "run", "--rm", "-u" & UG_ID], @cmd), false)

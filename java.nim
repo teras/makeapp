@@ -49,7 +49,7 @@ proc findOS*(list:string):seq[OSType] =
       if not added and part != "":
         kill "Unkown package type " & part.strip
   if os.len == 0:
-    kill "No destination opperatin system requested"
+    kill "No destination operating system requested"
   return os.deduplicate
 
 template idx(params:seq[string], idx:int):string =
@@ -118,17 +118,18 @@ proc makeWindows(output:string, res:Resource, name:string, version:string, appdi
   let execOut = randomDir()
   if icon != "": copyFile(icon, execOut / "appicon.ico")
   let modules = if modules=="": DEF_MODULES else: modules
-  myexec "Create " & $ostype & " executable", "docker", "run", "--rm", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
+  docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/windows -d:mingw -d:APPNAME=\"" & name & "\"" &
       " -d:COMPANY=\"" & vendor & "\" -d:DESCRIPTION=\"" & description & "\" -d:APPVERSION=" & version &
       " -d:LONGVERSION=" & longversion & " -d:COPYRIGHT=\"" & "(C) "&vendor & "\"" &
       " -d:JREPATH=runtime -d:JARPATH=" & jar &
       (if icon=="":"" else: " -d:ICON=target/appicon.ico") &
-      " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\""
+      " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\"" &
+      " ; chown " & UG_ID & " \"target/" & exec & "\""
   copyFile(execOut / exec, dest / exec)
-  myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "crossmob/jdkwin", "wine" & $bits,
-    "/java/win" & $bits & "/current/bin/jlink", "--add-modules", modules, "--output", "/usr/src/myapp/runtime", "--no-header-files",
-    "--no-man-pages", "--compress=2", "--strip-debug"
+  docker "Extract " & $ostype & " JRE", "-v", dest & ":/usr/src/myapp", "crossmob/jdkwin", "bash", "-c", "wine" & $bits &
+    " /java/win" & $bits & "/current/bin/jlink --add-modules " & modules & " --output /usr/src/myapp/runtime --no-header-files" &
+    " --no-man-pages --compress=2 --strip-debug ; chown -R " & UG_ID & " /usr/src/myapp/runtime"
   return dest
 
 # https://bugs.launchpad.net/qemu/+bug/1805913
@@ -145,13 +146,13 @@ proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:
   let compileFlags = if ostype==pLinuxArm32: "--cpu:arm --os:linux" elif ostype==pLinuxArm64: "--cpu:arm64 --os:linux" else: ""
   let strip = if ostype==pLinuxArm32: "arm-linux-gnueabi-strip" elif ostype==pLinuxArm64: "aarch64-linux-gnu-strip" else: "strip"
   let striptype = if ostype==pLinuxArm32 or ostype==pLinuxArm64: "--strip-java-debug-attributes" else:"--strip-debug"
-  myexec "Create " & $ostype & " executable", "docker", "run", "--rm", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
+  docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" & jar & 
-      " -o:target/AppRun javalauncher ; " & strip & " target/AppRun"
+      " -o:target/AppRun javalauncher ; " & strip & " target/AppRun ; chown " & UG_ID & " target/AppRun"
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
-  myexec "Extract " & $ostype & " JRE", "docker", "run", "--rm", "-v", dest & ":/usr/src/myapp", "adoptopenjdk/openjdk14:" & imageFlavour, 
-    "jlink", "--add-modules", modules, "--output", "/usr/src/myapp/runtime", "--no-header-files",
-    "--no-man-pages", "--compress=2", striptype
+  docker "Extract " & $ostype & " JRE", "-v", dest & ":/usr/src/myapp", "adoptopenjdk/openjdk14:" & imageFlavour, "bash", "-c" ,
+    "jlink --add-modules " & modules & " --output /usr/src/myapp/runtime --no-header-files --no-man-pages" &
+    " --compress=2 " & striptype & " ; chown -R " & UG_ID & " /usr/src/myapp/runtime"
   return dest
 
 proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
