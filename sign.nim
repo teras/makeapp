@@ -55,15 +55,19 @@ proc signMacOS(path:string, entitlements:string) =
   info "Sign " & (if path.existsDir: "app" else: "file") & " " & path.extractFilename
   discard signMacOSImpl(path, entitlements, true)
 
-proc signWindows(os:OSType, target,p12file,name,url:string) =
+proc signWindows(os:OSType, target,p12file,timestamp,name,url:string) =
   let unsigned = (if target.endsWith(".exe"): target.substr(0,target.len-5) else:target) & ".unsigned.exe"
   moveFile target, unsigned
-  myexec "Sign installer", "osslsigncode","sign", "-pkcs12", p12file, "-pass", P12PASS, 
-    "-n", name & " Installer", "-i", url, "-in", unsigned, "-out", target
-  myexec "", "osslsigncode", "verify", target
+  if timestamp=="":
+    myexec "Sign installer", "osslsigncode","sign", "-pkcs12", p12file, "-pass", P12PASS, 
+      "-n", name & " Installer", "-i", url, "-in", unsigned, "-out", target
+  else:
+    myexec "Sign installer", "osslsigncode","sign", "-pkcs12", p12file, "-pass", P12PASS, 
+      "-n", name & " Installer", "-i", url, "-t", timestamp, "-in", unsigned, "-out", target
+  myexecprobably "", "osslsigncode", "verify", target
   unsigned.removeFile
 
-proc sign*(os:seq[OSType], target, entitlements, p12file, name, url:string) =
+proc sign*(os:seq[OSType], target, entitlements, p12file, timestamp, name, url:string) =
   for cos in os:
     case cos:
       of pMacos:
@@ -72,5 +76,5 @@ proc sign*(os:seq[OSType], target, entitlements, p12file, name, url:string) =
         if dest == "": kill("No target file provided")
         signMacOS(target, entitlements)
       of pWin32,pWin64:
-        signWindows(cos, target, p12file, name, url)
+        signWindows(cos, target, p12file, timestamp, name, url)
       else: discard

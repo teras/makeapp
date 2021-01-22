@@ -1,4 +1,4 @@
-.PHONY: clean all desktop posix osx linux linux32 linux64 pi windows win32 win64 local install install-only run docker xclean
+.PHONY: clean all desktop posix osx linux linux32 linux64 arm arm32 arm64 windows win32 win64 local install install-only run docker xclean
 
 
 # needs to be defined before include
@@ -8,13 +8,17 @@ include config.mk
 
 DEST:=~/Works/System/bin/arch
 
+ifeq ($(OPTIMIZE),)
+OPTIMIZE:=size
+endif
+
 ifeq ($(DEBUG),true)
-BASENIMOPTS=-d:VERSION=$(VERSION) --opt:size $(NIMOPTS)
+BASENIMOPTS=-d:VERSION=$(VERSION) --opt:$(OPTIMIZE) $(NIMOPTS)
 else
 ifeq ($(DEBUG),full)
 BASENIMOPTS=-d:VERSION=$(VERSION) --debuginfo --linedir:on $(NIMOPTS)
 else
-BASENIMOPTS=-d:release -d:VERSION=$(VERSION) --opt:size $(NIMOPTS)
+BASENIMOPTS=-d:release -d:VERSION=$(VERSION) --opt:$(OPTIMIZE) $(NIMOPTS)
 endif
 endif
 
@@ -35,7 +39,7 @@ WINAPP:=console
 endif
 
 ifeq ($(ALLTARGETS),)
-ALLTARGETS:=desktop pi
+ALLTARGETS:=desktop arm
 endif
 
 ifneq ($(NIMBLE),)
@@ -65,9 +69,13 @@ all:$(ALLTARGETS)
 
 desktop:osx linux windows
 
-posix:osx linux pi
+posix:osx linux arm
 
-pi:target/${EXECNAME}.aarch64.linux
+arm:arm32 arm64
+
+arm64:target/${EXECNAME}.aarch64.linux
+
+arm32:target/${EXECNAME}.arm.linux
 
 osx:target/${EXECNAME}.osx
 
@@ -106,7 +114,7 @@ target/${EXECNAME}:${BUILDDEP}
 	nim ${COMPILER} ${BASENIMOPTS} ${OSXNIMOPTS} ${NAME}
 	mkdir -p target
 	mv ${NAME} target/${EXECNAME}
-	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME} ; fi
+	if [ "$(DOCOMPRESS)" = "t" ] ; then upx target/${EXECNAME} ; fi
 	cp target/${EXECNAME} target/${EXECNAME}.osx
 
 target/${EXECNAME}.osx:${BUILDDEP}
@@ -126,11 +134,15 @@ target/${EXECNAME}.linux32:${BUILDDEP}
 	docker run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME32} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${LINUXNIMOPTS} --cpu:i386 --passC:-m32 --passL:-m32 ${NAME} && strip ${NAME} ; if [ \"$(DOCOMPRESS)\" = \"t\" ] ; then upx --best ${NAME} ; fi && chown ${UGID} ${NAME}"
 	mv ${NAME} target/${EXECNAME}.linux32
 
-target/${EXECNAME}.aarch64.linux:${BUILDDEP}
+target/${EXECNAME}.arm.linux:${BUILDDEP}
 	mkdir -p target
 	docker run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${PINIMOPTS} --cpu:arm --os:linux ${NAME} && arm-linux-gnueabi-strip ${NAME} && chown ${UGID} ${NAME}"
 	mv ${NAME} target/${EXECNAME}.arm.linux
+	patchelf --set-interpreter /lib/ld-linux-armhf.so.3 target/${EXECNAME}.arm.linux
 	#if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.arm.linux ; fi
+
+target/${EXECNAME}.aarch64.linux:${BUILDDEP}
+	mkdir -p target
 	docker run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${PINIMOPTS} --cpu:arm64 --os:linux ${NAME} && aarch64-linux-gnu-strip ${NAME} && chown ${UGID} ${NAME}"
 	mv ${NAME} target/${EXECNAME}.aarch64.linux
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.aarch64.linux ; fi

@@ -16,7 +16,7 @@ proc convert(cmd:varargs[string]):string =
     else: first = false
     result.add entry.quoteShell
 
-proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool):string =
+proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool, canfail=false):string =
   let cmd = cmd.convert
   proc printCmd() = echo "▹▹ " & (if VERBOCITY>=3: cmd else: cmd
     .replace(ID, "[ID]")
@@ -33,7 +33,8 @@ proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool):string =
       if VERBOCITY<=1: printCmd()
       stdout.write txt
       stdout.flushFile
-      kill ": " & reason & " (" & $res & ")"
+      if not canfail:
+        kill ": " & reason & " (" & $res & ")"
   elif VERBOCITY>=1:
     stdout.write txt
     stdout.flushFile
@@ -42,6 +43,8 @@ proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool):string =
 proc myexecQuiet*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, cmd, true)
 
 proc myexec*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, cmd, false)
+
+proc myexecprobably*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, cmd, false, true)
 
 proc docker*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, concat(@["docker", "run", "--rm"], @cmd), false)
 

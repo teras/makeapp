@@ -84,6 +84,7 @@ template signOpt() =
   option("--entitle", help="Use the provided file as entitlements, defaults to a generic entitlements file. [MacOS target]")
   option("--p12file", help="The p12 file containing the signing keys. [Windows target]")
   option("--p12pass", help="The password of the p12file. [Windows target]")
+  option("--timestamp", help="Use a timestamp URL to timestamp the executable. [Windows target]")
   option("--gpgdir", help="The GnuPG directory containing the signing keys. [Linux target]")
   option("--gpgpass", help="The password of the GnuPG file. [Windows target]")
 template signImp(sign:bool, keyfile:string) =
@@ -95,6 +96,7 @@ template signImp(sign:bool, keyfile:string) =
   let entitle {.inject.} = if not sign: "" else: checkParam(if opts.entitle == "": getDefaultEntitlementFile() else: opts.entitle.absolutePath.normalizedPath, "Required entitlements file " & opts.entitle & " does not exist")
   let p12file {.inject.} = opts.p12file
   let gpgdir {.inject.} = opts.gpgdir
+  let timestamp {.inject.} = opts.timestamp
   if sign:
     if os.contains(windowsTargets):
       if p12file=="": kill "No p12 file provided"
@@ -204,7 +206,7 @@ Extras folder organization:
       ostypeImp(true)
       signImp(sign, keyfile)
       allImp()
-      safedo: createPack(os, templ, output, opts.target, sign, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
+      safedo: createPack(os, templ, output, opts.target, sign, entitle, p12file, timestamp, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       exit()
   command("sign"):
     option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
@@ -220,7 +222,7 @@ Extras folder organization:
       signImp(true, keyfile)
       allImp()
       if os.contains(linuxTargets): kill "Signing on Linux is not supported; signing is supported only when packaging"
-      safedo: sign(os, opts.target, entitle, p12file, name, url)
+      safedo: sign(os, opts.target, entitle, p12file, timestamp, name, url)
       exit()
   when system.hostOS == "macosx":
     command("notarize"):
@@ -267,7 +269,7 @@ Extras folder organization:
       sendImp(notarize)
       allImp()
       safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
-      safedo: createPack(os, "", instoutput, output, sign, entitle, p12file, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
+      safedo: createPack(os, "", instoutput, output, sign, entitle, p12file, timestamp, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
         safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)
       exit()

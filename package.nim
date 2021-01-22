@@ -63,11 +63,11 @@ proc createDMGImpl(givenDmg, output_file, app, name:string, sign:bool, entitleme
     info "Copy files"
     merge appdest, app
   if sign:
-    sign(@[pMacos], appdest, entitlements, "", "", "")
+    sign(@[pMacos], appdest, entitlements, "", "", "", "")
   myexec "Detach volume", "hdiutil", "detach", "-force", volume
   myexec "Compress volume", "hdiutil", "convert", srcdmg, "-format", "UDZO", "-imagekey", "zlib-level=9", "-ov", "-o", output_file
   if sign:
-    sign(@[pMacos], output_file, entitlements, "", "", "")
+    sign(@[pMacos], output_file, entitlements, "", "", "", "")
 
 proc createMacosPack(dmg_template, output_file, app, name:string, res:Resource, sign:bool, entitlements: string) =
   when defined(macosx):
@@ -152,14 +152,14 @@ Source:"app\*"; DestDir:"{app}"; Flags: recursesubdirs
   """
   return iss
 
-proc createWindowsPack(os:OSType, os_template, output_file, app, p12file:string, res:Resource, name, version, descr, url, vendor:string, sign:bool, associations:seq[Assoc]) =
+proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, timestamp:string, res:Resource, name, version, descr, url, vendor:string, sign:bool, associations:seq[Assoc]) =
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
   docker "", "-v", inst_res&":/work", "-v", app&":/work/app", "amake/innosetup", "installer.iss"
   moveFile inst_res / name & ".exe", output_file
   if sign:
-    sign(@[os], output_file, "", p12file, name, url)
+    sign(@[os], output_file, "", p12file, timestamp, name, url)
 
 proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, descr, cat:string, sign:bool) =
   let inst_res = randomDir()
@@ -187,7 +187,7 @@ Comment={descr}
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
 
-proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
+proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, timestamp, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
       app = checkParam(findApp(cos, if app != "": app else: getCurrentDir()), "No Application." & cos.appx & " found under " & (if app != "": app else: getCurrentDir()))
@@ -200,7 +200,7 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
     info "Creating " & ($cos).capitalizeAscii & " installer"
     case cos:
       of pMacos: createMacosPack(os_template, output_file, app, name, res, sign, entitlements)
-      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, res, name, version, descr, url, vendor, sign, assoc)
+      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, timestamp, res, name, version, descr, url, vendor, sign, assoc)
       of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, descr, cat, sign)
       of pGeneric: createGenericPack(output_file, app)
     
