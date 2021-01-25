@@ -59,7 +59,6 @@ template javaOpt() =
   option("--appdir", help="The directory where the application itself is stored. Could be missing: the application would be considered single-JAR")
   resOpt()
   option("--extra", help="The location of extra files to added to the bundle. This is a hierarchical folder, where first level has the name of the target (as defined by system target) or special keywords \"windows\" for all Windows targets and \"common\" for all targets. Second level are all files that will be merged with the files located at appdir.")
-  option("--modules", help="Comma separated list of required modules. Defaults to \"java.datatransfer,java.desktop,java.logging,java.prefs,java.rmi,java.xml,jdk.charsets\"")
   option("--jvmopt", multiple=true, help="JVM option. Could be used more than once.") # -Dawt.useSystemAAFontSettings=on -Dswing.aatext=true
   option("--id", help="Reverse URL unique identifier")
   option("--jdk", help="The location of the JDK")
@@ -74,7 +73,6 @@ template javaImp(name:string) =
         opts.appdir.absolutePath.normalizedPath
     jar {.inject.} = getJar(if singlejar: opts.jar.extractFilename else:opts.jar, appdir)
     extra {.inject.} = opts.extra
-    modules {.inject.} = opts.modules
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
     id {.inject.} = if opts.id == "": constructId(url,vendor, name) else: opts.id
     jdk {.inject.} = opts.jdk
@@ -183,7 +181,7 @@ Extras folder organization:
       javaImp(name)
       ostypeImp(false)
       allImp()
-      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
+      safedo: makeJava(os, output, res, name, version, appdir, jar, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
       exit()
   command("pack"):
     commonOutOpt()
@@ -268,7 +266,7 @@ Extras folder organization:
       let instoutput = if opts.instoutput == "": output else: opts.instoutput
       sendImp(notarize)
       allImp()
-      safedo: makeJava(os, output, res, name, version, appdir, jar, modules, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
+      safedo: makeJava(os, output, res, name, version, appdir, jar, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
       safedo: createPack(os, "", instoutput, output, sign, entitle, p12file, timestamp, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
         safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)

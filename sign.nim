@@ -52,7 +52,7 @@ proc signMacOSImpl(path:string, entitlements:string, rootSign:bool): seq[string]
     signFile(path, entitlements)
 
 proc signMacOS(path:string, entitlements:string) =
-  info "Sign " & (if path.existsDir: "app" else: "file") & " " & path.extractFilename
+  info "Sign " & (if path.dirExists: "app" else: "file") & " " & path.extractFilename
   discard signMacOSImpl(path, entitlements, true)
 
 proc signWindows(os:OSType, target,p12file,timestamp,name,url:string) =

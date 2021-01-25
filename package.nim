@@ -180,9 +180,9 @@ Comment={descr}
   let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGPASS & "' `mktemp` ; "
   docker "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder",
     "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
-    " ; chown " & UG_ID & " " & name.safe & ".appimage"
-
+    " && chown " & UG_ID & " " & name.safe & ".appimage"
   moveFile inst_res / name.safe & ".appimage", output_file
+  inclFilePermissions output_file, {FilePermission.fpUserExec, FilePermission.fpGroupExec}
 
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
