@@ -81,3 +81,5 @@ proc merge*(basedir:string, otherdir:string) =
       kill("Unknown file at " & src)
 
 proc safe*(name:string):string {.inline.}= name.replace(' ','_')
+
+template makeExec*(file:string) = file.inclFilePermissions({FilePermission.fpUserExec, FilePermission.fpGroupExec})

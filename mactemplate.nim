@@ -50,7 +50,7 @@ proc parseManifest(data:string) : TableRef[string,string] =
       return
     let colon = line.find(':')
     if colon < 1: raise newException(Exception, "Error in manifest file: no colon found")
-    dict.add(line.substr(0, colon-1).strip.toLowerAscii, line.substr(colon+1).strip)
+    dict[line.substr(0, colon-1).strip.toLowerAscii] = line.substr(colon+1).strip
   result = newTable[string,string]()
   var prev = ""
   for line in data.splitLines():

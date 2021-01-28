@@ -117,8 +117,8 @@ template sendImp(strict:bool) =
     checkParam USER, "No user provided"
 
 
-const p = newParser("makeapp " & VERSION):
-  help("Create, sign, and notarize DMG files for the Apple store, to make later versions of macOS happy.\nMore info at https://github.com/teras/makeapp")
+const p = newParser("makeapp"):
+  help("makeapp " & VERSION & "\n\nCreate, sign, and notarize DMG files for the Apple store, to make later versions of macOS happy.\nMore info at https://github.com/teras/makeapp")
   command("help"):
     run:
       echo """

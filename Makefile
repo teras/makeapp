@@ -46,9 +46,11 @@ ifneq ($(NIMBLE),)
 NIMBLE:=nimble refresh ; nimble -y install $(NIMBLE);
 DOCKERNAME:=teras/nimcross:${NAME}
 DOCKERNAME32:=teras/nimcross32:${NAME}
+DOCKERNAMEOSX:=teras/nimcrossosx:${NAME}
 else
 DOCKERNAME:=teras/nimcross
 DOCKERNAME32:=teras/nimcross32
+DOCKERNAMEOSX:=teras/nimcrossosx
 endif
 
 ifneq ($(NIMVER),)
@@ -101,14 +103,20 @@ docker:
 	mkdir docker.tmp && \
 	echo >docker.tmp/Dockerfile "FROM teras/nimcross" && \
 	echo >>docker.tmp/Dockerfile "RUN ${NIMBLE}" && \
-	cd docker.tmp ; docker build -t ${DOCKERNAME} . && \
+	cd docker.tmp ; docker build -t ${DOCKERNAME} . && cd .. &&\
 	rm -rf docker.tmp ; \
         mkdir docker.tmp && \
         echo >docker.tmp/Dockerfile "FROM teras/nimcross32" && \
         echo >>docker.tmp/Dockerfile "RUN ${NIMBLE}" && \
-        cd docker.tmp ; docker build -t ${DOCKERNAME32} . && \
+        cd docker.tmp ; docker build -t ${DOCKERNAME32} . && cd .. &&\
+        rm -rf docker.tmp ; \
+        mkdir docker.tmp && \
+        echo >docker.tmp/Dockerfile "FROM teras/nimcrossosx" && \
+        echo >>docker.tmp/Dockerfile "RUN ${NIMBLE}" && \
+        cd docker.tmp ; docker build -t ${DOCKERNAMEOSX} . && cd ..&&\
         rm -rf docker.tmp ; \
 	fi
+
 
 target/${EXECNAME}:${BUILDDEP}
 	nim ${COMPILER} ${BASENIMOPTS} ${OSXNIMOPTS} ${NAME}
@@ -119,7 +127,7 @@ target/${EXECNAME}:${BUILDDEP}
 
 target/${EXECNAME}.osx:${BUILDDEP}
 	mkdir -p target
-	docker run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${OSXNIMOPTS} --os:macosx --passC:'-mmacosx-version-min=10.7 -gfull' --passL:'-mmacosx-version-min=10.7 -dead_strip' ${NAME} && x86_64-apple-darwin19-strip ${NAME} && chown ${UGID} ${NAME}"
+	docker run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAMEOSX} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${OSXNIMOPTS} --os:macosx --passC:'-mmacosx-version-min=10.7 -gfull' --passL:'-mmacosx-version-min=10.7 -dead_strip' ${NAME} && x86_64-apple-darwin19-strip ${NAME} && chown ${UGID} ${NAME}"
 	mv ${NAME} target/${EXECNAME}.osx
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.osx ; fi
 

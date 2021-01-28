@@ -182,7 +182,7 @@ Comment={descr}
     "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
     " && chown " & UG_ID & " " & name.safe & ".appimage"
   moveFile inst_res / name.safe & ".appimage", output_file
-  inclFilePermissions output_file, {FilePermission.fpUserExec, FilePermission.fpGroupExec}
+  output_file.makeExec
 
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
@@ -203,7 +203,5 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, timestamp, res, name, version, descr, url, vendor, sign, assoc)
       of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, descr, cat, sign)
       of pGeneric: createGenericPack(output_file, app)
-    
-    
 
-   
+

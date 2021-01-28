@@ -55,8 +55,6 @@ proc findOS*(list:string):seq[OSType] =
 template idx(params:seq[string], idx:int):string =
   if idx>=params.len: "" else: params[idx]
 
-template makeExec(file:string) = file.setFilePermissions({fpUserExec, fpUserRead, fpUserWrite, fpGroupExec, fpGroupRead, fpOthersExec, fpOthersRead})
-
 proc findAccociations*(assoc:seq[string], res:Resource): seq[Assoc] =
   for entry in assoc:
     let parts = entry.split(':')
@@ -142,9 +140,15 @@ proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:
   let execOut = randomDir()
   let compileFlags = if ostype==pLinuxArm32: "--cpu:arm --os:linux" elif ostype==pLinuxArm64: "--cpu:arm64 --os:linux" else: ""
   let strip = if ostype==pLinuxArm32: "arm-linux-gnueabi-strip" elif ostype==pLinuxArm64: "aarch64-linux-gnu-strip" else: "strip"
+  let fixArm =
+    if ostype==pLinuxArm32:
+      " && patchelf --set-interpreter /lib/ld-linux-armhf.so.3 target/AppRun"
+    elif ostype==pLinuxArm64:
+      " && patchelf --set-interpreter /lib/ld-linux-aarch64.so.1 target/AppRun"
+    else: ""
   docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" & jar & 
-      " -o:target/AppRun javalauncher ; " & strip & " target/AppRun ; chown " & UG_ID & " target/AppRun"
+      " -o:target/AppRun javalauncher ; " & strip & " target/AppRun ; chown " & UG_ID & " target/AppRun" & fixArm
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
   extractRuntime ostype, dest
   return dest
