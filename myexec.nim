@@ -4,7 +4,7 @@ var USER*:string
 var PASSWORD*:string
 var ID*:string
 var P12PASS*:string
-var GPGPASS*:string
+var GPGKEY*:string
 
 let UG_ID* = when defined(windows): "1000:1000"
   else: $getuid() & ":" & $getgid()
@@ -23,7 +23,7 @@ proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool, canfail=false):s
     .replace(USER, "[USER]")
     .replace(PASSWORD, "[PASSWORD]")
     .replace(P12PASS, "[P12PASS]")
-    .replace(GPGPASS, "[GPGPASS]")
+    .replace(GPGKEY, "[GPGKEY]")
     )# no call to 'info', so that command will be displayed even on error
   if reason != "": info reason
   if VERBOCITY>=2: printCmd()

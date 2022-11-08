@@ -6,7 +6,7 @@ const NOTARIZE_USER         = "NOTARIZE_USER"
 const NOTARIZE_ASC_PROVIDER = "NOTARIZE_ASC_PROVIDER"
 const NOTARIZE_SIGN_ID      = "NOTARIZE_SIGN_ID"
 const SIGN_P12_PASS         = "SIGN_P12_PASS"
-const SIGN_GPG_PASS         = "SIGN_GPG_PASS"
+const GPG_KEY_VAR           = "GPG_KEY"
 
 const VERSION {.strdefine.}: string = ""
 
@@ -55,8 +55,8 @@ template infoImp(res:Resource) =
     cat {.inject.} = opts.cat
 
 template javaOpt() =
-  option("--jar", help="The base JAR of the application. If no --appdir is provided, then the application is considered single-JAR with no other dependencies")
-  option("--appdir", help="The directory where the application itself is stored. Could be missing: the application would be considered single-JAR")
+  option("--input", help="The input location of the application. If it is a file, it should be a JAR file. If it is a directory, all files in this directory are taken into consideration and the --jarname parameter should be provided")
+  option("--jarname", help="If input is a directory, this parameter should define the JAR filename. Note: only the filename should be provided, not the relative or the absolute path.")
   resOpt()
   option("--extra", help="The location of extra files to added to the bundle. This is a hierarchical folder, where first level has the name of the target (as defined by system target) or special keywords \"windows\" for all Windows targets and \"common\" for all targets. Second level are all files that will be merged with the files located at appdir.")
   option("--jvmopt", multiple=true, help="JVM option. Could be used more than once.") # -Dawt.useSystemAAFontSettings=on -Dswing.aatext=true
@@ -64,18 +64,25 @@ template javaOpt() =
   option("--jdk", help="The location of the JDK")
 template javaImp(name:string) =
   let
-    singlejar {.inject.} = opts.appdir == ""
-    appdir {.inject.} = if singlejar:
-        if not opts.jar.fileExists: kill "No --appdir defined and --jar is not properly set"
-        opts.jar.parentDir.absolutePath.normalizedPath
+    input {.inject.} = opts.input.absolutePath.normalizedPath
+    jarname {.inject.} = if input.dirExists:
+        let cjar = opts.jarname
+        if cjar == "" : kill "Parameter --jarname is mandatory, if --input is a directory"
+        if cjar.contains(DirSep): kill "Parameter --jarname should not contain a path"
+        if not (input/cjar).fileExists: kill "Unable to locate JAR " & (input/cjar)
+        cjar
+      elif input.fileExists:
+        if opts.jarname != "": kill "Parameter --input provided a file; it is not allowed to use --jarname"
+        input.extractFilename
       else:
-        if not opts.appdir.dirExists: kill "Not a directory: " & opts.appdir
-        opts.appdir.absolutePath.normalizedPath
-    jar {.inject.} = getJar(if singlejar: opts.jar.extractFilename else:opts.jar, appdir)
+        kill "Unknown input: " & opts.input
+        ""
     extra {.inject.} = opts.extra
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
     id {.inject.} = if opts.id == "": constructId(url,vendor, name) else: opts.id
     jdk {.inject.} = opts.jdk
+  if not jarname.toLowerAscii.endsWith(".jar"):
+    kill "JAR file should end with \".jar\" extension, given: " & jarname
 
 template signOpt() =
   option("--signid", help="The sign id, as given by `security find-identity -v -p codesigning`. [MacOS target]")
@@ -84,13 +91,13 @@ template signOpt() =
   option("--p12pass", help="The password of the p12file. [Windows target]")
   option("--timestamp", help="Use a timestamp URL to timestamp the executable. [Windows target]")
   option("--gpgdir", help="The GnuPG directory containing the signing keys. [Linux target]")
-  option("--gpgpass", help="The password of the GnuPG file. [Windows target]")
+  option("--gpgkey", help="The password of the GnuPG file. [Linux target]")
 template signImp(sign:bool, keyfile:string) =
   if sign:
     let config = if keyfile != "" and keyfile.fileExists: loadConfig(keyfile) else: newConfig()
     ID = config.checkPass(opts.signid, NOTARIZE_SIGN_ID, "No sign id provided", os, @[pMacos])
     P12PASS = config.checkPass(opts.p12pass, SIGN_P12_PASS, "No p12 password provided", os, windowsTargets)
-    GPGPASS = config.checkPass(opts.gpgpass, SIGN_GPG_PASS, "No GnuPG password provided", os, linuxTargets)
+    GPGKEY = config.checkPass(opts.gpgkey, GPG_KEY_VAR, "No GnuPG password provided", os, linuxTargets)
   let entitle {.inject.} = if not sign: "" else: checkParam(if opts.entitle == "": getDefaultEntitlementFile() else: opts.entitle.absolutePath.normalizedPath, "Required entitlements file " & opts.entitle & " does not exist")
   let p12file {.inject.} = opts.p12file
   let gpgdir {.inject.} = opts.gpgdir
@@ -131,7 +138,7 @@ Environmental variables:
   Windows:
     SIGN_P12_PASS         : The password of the p12 file
   Linux:
-    SIGN_GPG_PASS         : The password of the GnuPG file
+    GPG_KEY               : The password of the GnuPG file
 
 Default resources:
   All targets:
@@ -181,7 +188,7 @@ Extras folder organization:
       javaImp(name)
       ostypeImp(false)
       allImp()
-      safedo: makeJava(os, output, res, name, version, appdir, jar, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
+      safedo: makeJava(os, output, res, name, version, input, jarname, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
       exit()
   command("pack"):
     commonOutOpt()
@@ -266,7 +273,7 @@ Extras folder organization:
       let instoutput = if opts.instoutput == "": output else: opts.instoutput
       sendImp(notarize)
       allImp()
-      safedo: makeJava(os, output, res, name, version, appdir, jar, jvmopts, assoc, extra, vendor, descr, id, url, jdk, singlejar)
+      safedo: makeJava(os, output, res, name, version, input, jarname, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
       safedo: createPack(os, "", instoutput, output, sign, entitle, p12file, timestamp, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
       if notarize:
         safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)

@@ -1,4 +1,4 @@
-import os, strutils, nim_miniz, myexec, autos, helper, types
+import os, strutils, nim_miniz, myexec, autos, helper, types, algorithm
 
 {.compile: "fileloader.c".}
 proc needsSigning(path:cstring):bool {.importc.}
@@ -27,8 +27,8 @@ const DEFAULT_ENTITLEMENT = """
 proc getDefaultEntitlementFile*(): string = randomFile(DEFAULT_ENTITLEMENT)
 
 proc signFile(path:string, entitlements:string) =
-  myexec "", "codesign", "--timestamp", "--deep", "--force", "--verify", "--verbose", "--options", "runtime", "--sign", ID, "--entitlements", entitlements, path
-  myexec "", "codesign", "--verify", "--verbose", path
+  myexec "", "codesign", "--timestamp", "--force", "--verify", "--verbose", "--options", "runtime", "--sign", ID, "--entitlements", entitlements, path
+  myexec "", "codesign", "-vvv", "--deep", "--strict", "--verbose", path
 
 proc signMacOSJarEntries(jarfile:string, entitlements:string) =
   let tempdir = randomDir()
@@ -39,15 +39,19 @@ proc signMacOSJarEntries(jarfile:string, entitlements:string) =
 
 proc signMacOSImpl(path:string, entitlements:string, rootSign:bool): seq[string] =
   template full(cfile:string):string = joinPath(path, cfile)
+  var deferSign:seq[string] = @[]
   for file in walkDirRec(path, relative = true):
     if file.endsWith(".cstemp"):
       file.full.removeFile
     elif file.endsWith(".jnilib") or file.endsWith(".dylib") or file.full.cstring.needsSigning:
-      signFile(file.full, entitlements)
+      deferSign.add(file)
       if not rootSign: result.add file
     elif file.endsWith(".jar"):
       signMacOSJarEntries(file.full, entitlements)
       if not rootSign: result.add file
+  deferSign.sort  # That's a really dirty trick to handle signing requests. In reality we need dependency hierarchy priority.
+  for deferred in deferSign:
+    signFile(deferred.full, entitlements)
   if rootSign:
     signFile(path, entitlements)
 

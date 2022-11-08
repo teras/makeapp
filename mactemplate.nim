@@ -1,7 +1,7 @@
 import tables, strutils,nim_miniz, autos,os
 
 const LAUNCHER* = ("Launcher").staticRead
-const APPLAUNCHERLIB* = ("libapplauncher.dylib").staticRead
+# const APPLAUNCHERLIB* = ("libapplauncher.dylib").staticRead
 
 
 proc getInfoPlist*(appname,bundleid,version,copyright:string):string =
@@ -35,7 +35,7 @@ proc getInfoPlist*(appname,bundleid,version,copyright:string):string =
   <key>LSApplicationCategoryType</key>
   <string>Unknown</string>
   <key>CFBundleVersion</key>
-  <string>100</string>
+  <string>""" & version & """</string>
   <key>NSHumanReadableCopyright</key>
   <string>""" & copyright & """</string>
   <key>NSHighResolutionCapable</key>
@@ -76,21 +76,20 @@ proc findMainClass(jar:string):string =
 proc getCfg*(name,version,id,mainjar,appdir:string):string = 
   return """
 [Application]
+app.classpath=$APPDIR/""" & mainjar & """
+
+app.mainclass=""" & findMainClass(appdir/mainjar) & """
+
 app.name=""" & name & """
 
 app.version=""" & version & """
 
-app.runtime=$ROOTDIR/runtime
 app.identifier=""" & id & """
 
-app.classpath=$ROOTDIR/app/""" & mainjar & """
-
-app.mainjar=$ROOTDIR/app/""" & mainjar & """
-
-app.mainclass=""" & findMainClass(appdir/mainjar) & """
-
-
-[JavaOptions]
-
-[ArgOptions]
 """
+
+proc getJpackageXML*(name,version:string):string =
+  return """<?xml version="1.0" ?>
+<jpackage-state version="15.0.1" platform="macOS">
+  <app-version>""" & version & """</app-version>
+  <main-launcher>""" & name & """</main-launcher></jpackage-state>"""

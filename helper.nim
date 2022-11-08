@@ -49,7 +49,7 @@ proc findApp*(ostype:OSType, base:string) : string =
 
 proc isTrue*(val:string): bool =
   let val = val.strip.toLowerAscii
-  return val == "1" or val.startsWith("t") or val.startsWith("y")
+  return val == "1" or val.startsWith("t") or val.startsWith("y") or val.startsWith("e")
 
 proc checkParam*(param:string, error:string, asFile=false, asDir=false): string {.discardable.}=
   let param=param.strip

@@ -1,5 +1,8 @@
 import strutils, sequtils, os, autos, myexec, helper, types, uri, algorithm, mactemplate
 
+# The relative path where the copied app is found
+const APPDIR = "app"
+
 # The java modules are hard coded into the Docker file
 
 proc getAssocDef(res:Resource, ostype:OSType, assoc:Assoc): string =
@@ -65,16 +68,6 @@ proc findAccociations*(assoc:seq[string], res:Resource): seq[Assoc] =
       descr = parts.idx(2).strip
     result.add Assoc(extension:ext, description:descr, mime:mime)
 
-proc getJar*(jar:string, appdir:string): string =
-    if jar == "": kill "No source JAR provided"
-    if not jar.endsWith(".jar"): kill "JAR file should end with \".jar\" extension, given: " & jar
-    var jar = if jar.isAbsolute: jar else: appdir / jar
-    jar = jar.absolutePath
-    jar.normalizePath
-    if not jar.startsWith(appdir): kill "JAR at location " & jar & " doesn't seem to be under directory " & appdir
-    if not jar.fileExists: kill "Unable to locate file " & jar
-    return jar.relativePath(appdir)
-
 proc getJvmOpts*(opts:seq[string]): seq[string] =
   for opt in opts:
     if opt == "": discard
@@ -93,29 +86,28 @@ proc constructId*(url,vendor,name:string): string =
     if parts.len>0 and parts[0]=="www": parts.delete(0)
     return parts.reversed.join(".") & "." & name.norm
 
-proc copyAppFiles(appdir, dest, jar:string, singlejar:bool):string =
-  if singlejar:
-    let dest_app = dest / "app"
-    dest_app.createDir
-    copyFile(appdir / jar, dest_app / jar)
-    return "app" / jar
-  else:
-    merge dest, appdir
-    return jar
+proc copyAppFiles(input, dest:string) {.inject.} =
+  dest.createDir
+  if not dest.dirExists:
+    kill "Unable to create direcotry " & dest
+  if input.dirExists:
+    merge dest, input
+  elif input.fileExists:
+    copyFile(input, dest/(input.extractFilename))
 
 proc extractRuntime(ostype:OSType, output:string) =
   docker "Extract " & $ostype & " JRE", "-v", output & ":/target", "crossmob/jre", "sh", "-c" ,
     "cp -a /java/" & ostype.jrearch & " /target" & " && mv /target/" & ostype.jrearch & " /target/runtime && chown -R " & UG_ID & " /target/runtime"
 
-proc makeWindows(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
+proc makeWindows(output:string, res:Resource, name, version, input, jarname:string,
     jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string, ostype:OSType):string =
   let bits = ostype.bits
   let exec = name & ".exe"
   let cpu = if bits==32: "i386" else: "amd64"
   let strip = if bits==32: "i686-w64-mingw32-strip" else: "x86_64-w64-mingw32-strip"
   let dest = output / name & "." & ostype.appx
-  let jar = copyAppFiles(appdir, dest, jar, singlejar)
+  copyAppFiles(input, dest/APPDIR)
   let longversion = "1.0.0.0"
   let execOut = randomDir()
   if icon != "": copyFile(icon, execOut / "appicon.ico")
@@ -123,20 +115,20 @@ proc makeWindows(output:string, res:Resource, name:string, version:string, appdi
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/windows -d:mingw -d:APPNAME=\"" & name & "\"" &
       " -d:COMPANY=\"" & vendor & "\" -d:DESCRIPTION=\"" & description & "\" -d:APPVERSION=" & version &
       " -d:LONGVERSION=" & longversion & " -d:COPYRIGHT=\"" & "(C) "&vendor & "\"" &
-      " -d:JREPATH=runtime -d:JARPATH=" & jar &
+      " -d:JREPATH=runtime -d:JARPATH=" & APPDIR & "/" & jarname &
       (if icon=="":"" else: " -d:ICON=target/appicon.ico") &
       " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\"" &
       " ; chown " & UG_ID & " \"target/" & exec & "\""
   copyFile(execOut / exec, dest / exec)
   extractRuntime ostype, dest
-  return dest
+  return dest/APPDIR
 
 # https://bugs.launchpad.net/qemu/+bug/1805913
-proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
+proc makeLinux(output:string, res:Resource, name, version, input, jarname:string,
     jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool, ostype:OSType):string =
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string, ostype:OSType):string =
   let dest = output / name.safe & "." & ostype.appx
-  let jar = copyAppFiles(appdir, dest, jar, singlejar)
+  copyAppFiles(input, dest/APPDIR)
   let execOut = randomDir()
   let compileFlags = if ostype==pLinuxArm32: "--cpu:arm --os:linux" elif ostype==pLinuxArm64: "--cpu:arm64 --os:linux" else: ""
   let strip = if ostype==pLinuxArm32: "arm-linux-gnueabi-strip" elif ostype==pLinuxArm64: "aarch64-linux-gnu-strip" else: "strip"
@@ -147,54 +139,51 @@ proc makeLinux(output:string, res:Resource, name:string, version:string, appdir:
       " && patchelf --set-interpreter /lib/ld-linux-aarch64.so.1 target/AppRun"
     else: ""
   docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
-    "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" & jar & 
-      " -o:target/AppRun javalauncher ; " & strip & " target/AppRun ; chown " & UG_ID & " target/AppRun" & fixArm
+    "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" &
+      APPDIR & "/" & jarname & " -o:target/AppRun javalauncher ; " & strip & " target/AppRun ; chown " & UG_ID & " target/AppRun" & fixArm
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
   extractRuntime ostype, dest
-  return dest
+  return dest/APPDIR
 
-proc makeMacos(output:string, res:Resource, name:string, version:string, appdir:string, jar:string,
+proc makeMacos(output:string, res:Resource, name, version, input, jarname:string,
     jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
-    vendor:string, description:string, identifier:string, url:string, jdkhome:string, singlejar:bool):string =
-  if singlejar:
-    let dest = output / name & "." & pMacos.appx
-    let contents = dest/"Contents"
-    let macos = contents/"MacOS"
-    let resources = contents/"Resources"
-    contents.createDir
-    macos.createDir
-    resources.createDir
-
-    discard copyAppFiles(appdir, contents, jar, singlejar)
-    (contents/"app"/name&".cfg").writeFile getCfg(name,version,identifier,jar,appdir)
-    (contents/"PkgInfo").writeFile "APPL????"
-    (contents/"Info.plist").writeFile getInfoPlist(name,identifier,version,"(C) "&vendor)
-    if icon.fileExists: icon.copyFile(resources/name&".icns")
+    vendor:string, description:string, identifier:string, url:string, jdkhome:string):string =
+  let dest = output / name & "." & pMacos.appx / "Contents"
+  let macos = dest/"MacOS"
+  let resources = dest/"Resources"
+  macos.createDir
+  resources.createDir
+  block makeExec: # MacOS
     let exec = macos/name
     exec.writeFile LAUNCHER
     exec.makeExec
-    (macos/"libapplauncher.dylib").writeFile APPLAUNCHERLIB
-    extractRuntime OSType.pMacos, contents
-    return contents/"app"
-  else:
-    kill "Application should be singe jar"
+  block makeApp:  # app
+    copyAppFiles(input, dest/APPDIR)
+    (dest/APPDIR/name&".cfg").writeFile getCfg(name,version,identifier,jarname,dest/APPDIR)
+    (dest/APPDIR/".jpackage.xml").writeFile getJpackageXML(name,version)
+  if icon.fileExists: # Resources
+    icon.copyFile(resources/name&".icns")
+  (dest/"Info.plist").writeFile getInfoPlist(name,identifier,version,"(C) "&vendor)
+  (dest/"PkgInfo").writeFile "APPL????"
+  extractRuntime OSType.pMacos, dest  # runtime
+  return dest/APPDIR
 
-proc makeGeneric(output, name, version, appdir, jar:string, singlejar:bool):string =
+proc makeGeneric(output, name, version, input, jarname:string):string =
   let cname = name.toLowerAscii
   let dest = output / cname & "-" & version & "." & pGeneric.appx
-  let jar = copyAppFiles(appdir, dest, jar, singlejar)
+  copyAppFiles(input, dest/APPDIR)
   let launcherfile = dest / cname.safe
   writeFile launcherfile, """
 #!/bin/sh
 cd "`dirname \"$0\"`"
-java -jar """" & jar & """"
+java -jar """" & APPDIR & "/" & jarname & """"
 """
   launcherfile.makeExec
   writeFile dest / cname & ".bat", """
 @ECHO OFF
-start javaw -jar """" & jar & """"
+start javaw -jar """" & APPDIR & "\\" & jarname & """"
 """
-  return dest
+  return dest/APPDIR
 
 proc copyExtraFiles(app:string, extra:string, ostype:OSType) =
   let common = extra / "common"
@@ -209,8 +198,8 @@ proc copyExtraFiles(app:string, extra:string, ostype:OSType) =
   let current = extra / osname
   if current.dirExists: merge(app, current)
 
-proc makeJava*(os:seq[OSType], output:string, res:Resource, name, version, appdir, jar:string, jvmopts:seq[string],
-    associations:seq[Assoc], extra, vendor, description, identifier, url, jdkhome:string, singlejar:bool) =
+proc makeJava*(os:seq[OSType], output:string, res:Resource, name, version, input, jarname:string, jvmopts:seq[string],
+    associations:seq[Assoc], extra, vendor, description, identifier, url, jdkhome:string) =
   let
     jdkhome = if jdkhome == "": getEnv("JAVA_HOME") else: jdkhome
     extra = extra.absolutePath
@@ -218,8 +207,8 @@ proc makeJava*(os:seq[OSType], output:string, res:Resource, name, version, appdi
   for cos in os:
     let icon = res.icon("app", cos)
     let appout = case cos:
-      of pMacos: makeMacos(output, res, name, version, appdir, jar, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar)
-      of pWin32, pWin64: makeWindows(output, res, name, version, appdir, jar, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
-      of pLinux64, pLinuxArm32, pLinuxArm64: makeLinux(output, res, name, version, appdir, jar, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, singlejar, cos)
-      of pGeneric: makeGeneric(output, name, version, appdir, jar, singlejar)
+      of pMacos: makeMacos(output, res, name, version, input, jarname, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome)
+      of pWin32, pWin64: makeWindows(output, res, name, version, input, jarname, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
+      of pLinux64, pLinuxArm32, pLinuxArm64: makeLinux(output, res, name, version, input, jarname, jvmopts, associations, icon, splash, vendor, description, identifier, url, jdkhome, cos)
+      of pGeneric: makeGeneric(output, name, version, input, jarname)
     if extra != "": copyExtraFiles(appout, extra, cos)
