@@ -156,12 +156,12 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, timest
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
-  docker "", "-v", inst_res&":/work", "-v", app&":/work/app", "amake/innosetup", "installer.iss"
+  docker "", "-v", inst_res&":/work", "-v", app&":/work/app", "docker.io/amake/innosetup", "installer.iss"
   moveFile inst_res / name & ".exe", output_file
   if sign:
     sign(@[os], output_file, "", p12file, timestamp, name, url)
 
-proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, descr, cat:string, sign:bool) =
+proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, version, descr, cat:string, sign:bool) =
   let inst_res = randomDir()
   let cname = name.toLowerAscii.safe
   var desktop = fmt"""[Desktop Entry]
@@ -176,12 +176,17 @@ Comment={descr}
     copyFile icon, app / cname&".png"
     desktop.add "Icon=" & cname & "\n"
   writeFile app / cname&".desktop", desktop
-  let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
-  let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGKEY & "' `mktemp` ; "
-  docker "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder",
-    "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
-    " && chown " & UG_ID & " " & name.safe & ".appimage"
-  moveFile inst_res / name.safe & ".appimage", output_file
+  # Old version
+  # let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
+  # let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGKEY & "' `mktemp` ; "
+  # docker "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "docker.io/crossmob/appimage-builder",
+  #   "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
+  #   dockerChown (name.safe & ".appimage")
+  let appdir = app.lastPathPart.safe
+  docker "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & appdir, "docker.io/crossmob/appimage-builder",
+    "bash", "-c", "export VERSION=" & version & " && /opt/appimage/AppRun " & appdir & dockerChown("*.AppImage")
+  let produced =  inst_res.walkDir.toSeq.mapIt(it.path).filter(proc(x:string):bool = x.endsWith(".AppImage"))[0]  # get the actual target filename
+  moveFile produced, output_file
   output_file.makeExec
 
 proc createGenericPack(output_file, app:string) =
@@ -201,7 +206,7 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
     case cos:
       of pMacos: createMacosPack(os_template, output_file, app, name, res, sign, entitlements)
       of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, timestamp, res, name, version, descr, url, vendor, sign, assoc)
-      of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, descr, cat, sign)
+      of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, version, descr, cat, sign)
       of pGeneric: createGenericPack(output_file, app)
 
 

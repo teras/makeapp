@@ -96,8 +96,8 @@ proc copyAppFiles(input, dest:string) {.inject.} =
     copyFile(input, dest/(input.extractFilename))
 
 proc extractRuntime(ostype:OSType, output:string) =
-  docker "Extract " & $ostype & " JRE", "-v", output & ":/target", "crossmob/jre", "sh", "-c" ,
-    "cp -a /java/" & ostype.jrearch & " /target" & " && mv /target/" & ostype.jrearch & " /target/runtime && chown -R " & UG_ID & " /target/runtime"
+  docker "Extract " & $ostype & " JRE", "-v", output & ":/target", "docker.io/crossmob/jre", "sh", "-c" ,
+    "cp -a /java/" & ostype.jrearch & " /target" & " && mv /target/" & ostype.jrearch & " /target/runtime" & dockerChown("/target/runtime")
 
 proc makeWindows(output:string, res:Resource, name, version, input, jarname:string,
     jvmopts:seq[string], associations:seq[Assoc], icon:string, splash:string,
@@ -111,14 +111,14 @@ proc makeWindows(output:string, res:Resource, name, version, input, jarname:stri
   let longversion = "1.0.0.0"
   let execOut = randomDir()
   if icon != "": copyFile(icon, execOut / "appicon.ico")
-  docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
+  docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "docker.io/crossmob/javalauncher", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/windows -d:mingw -d:APPNAME=\"" & name & "\"" &
       " -d:COMPANY=\"" & vendor & "\" -d:DESCRIPTION=\"" & description & "\" -d:APPVERSION=" & version &
       " -d:LONGVERSION=" & longversion & " -d:COPYRIGHT=\"" & "(C) "&vendor & "\"" &
       " -d:JREPATH=runtime -d:JARPATH=" & APPDIR & "/" & jarname &
       (if icon=="":"" else: " -d:ICON=target/appicon.ico") &
       " --app:gui --cpu:" & cpu & " \"-o:target/" & exec & "\" javalauncher ; " & strip & " \"target/" & exec & "\"" &
-      " ; chown " & UG_ID & " \"target/" & exec & "\""
+      dockerChown("target/" & exec) 
   copyFile(execOut / exec, dest / exec)
   extractRuntime ostype, dest
   return dest/APPDIR
@@ -138,9 +138,9 @@ proc makeLinux(output:string, res:Resource, name, version, input, jarname:string
     elif ostype==pLinuxArm64:
       " && patchelf --set-interpreter /lib/ld-linux-aarch64.so.1 target/AppRun"
     else: ""
-  docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
+  docker "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "docker.io/crossmob/javalauncher", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" &
-      APPDIR & "/" & jarname & " -o:target/AppRun javalauncher ; " & strip & " target/AppRun ; chown " & UG_ID & " target/AppRun" & fixArm
+      APPDIR & "/" & jarname & " -o:target/AppRun javalauncher ; " & strip & " target/AppRun" & dockerChown("target/AppRun") & fixArm
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
   extractRuntime ostype, dest
   return dest/APPDIR

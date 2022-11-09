@@ -11,11 +11,11 @@ proc icon*(res:Resource, name:string, ostype:OSType):string =
   let png = res.path(name & ".png")
   if png=="": return ""
   if windowsTargets.contains(ostype):
-    dockeru "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "crossmob/appimage-builder", 
+    dockeru "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "docker.io/crossmob/appimage-builder", 
       "convert", "/data/base/"&name&".png", "/data/gen/"&name&".ico"
     return res.gen/name&".ico"
   elif ostype == pMacos:
-    dockeru "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "crossmob/appimage-builder", 
+    dockeru "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "docker.io/crossmob/appimage-builder", 
       "png2icns", "/data/gen/"&name&".icns", "/data/base/"&name&".png"
     return res.gen/name&".icns"
   return ""

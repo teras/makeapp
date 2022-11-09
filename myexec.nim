@@ -1,4 +1,4 @@
-import strutils, osproc, autos, sequtils, posix
+import strutils, osproc, autos, sequtils, posix, os
 
 var USER*:string
 var PASSWORD*:string
@@ -6,8 +6,12 @@ var ID*:string
 var P12PASS*:string
 var GPGKEY*:string
 
-let UG_ID* = when defined(windows): "1000:1000"
+let UG_ID = when defined(windows): "1000:1000"
   else: $getuid() & ":" & $getgid()
+let podman = findExe("podman") != ""
+proc dockerChown*(file:string):string = 
+  if podman: "" else: " && chown " & UG_ID & " \"" & file & "\""
+
 
 proc convert(cmd:varargs[string]):string =
   var first = true
