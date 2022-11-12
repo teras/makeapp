@@ -58,6 +58,7 @@ NIMVER:=choosenim $(NIMVER);
 endif
 
 DOCOMPRESS:=$(shell echo $(COMPRESS) | tr A-Z a-z | cut -c1-1)
+DOSTATIC:=$(shell echo $(STATIC) | tr A-Z a-z | cut -c1-1)
 
 BUILDDEP:=$(wildcard *.nim *.c *.m Makefile config.mk)
 
@@ -97,6 +98,22 @@ clean:	## Clean up project files
 
 help:	## Show this message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
+helpconfig:	## Show config.mk options
+	@echo 'Required:'
+	@echo '    NAME        The application name'
+	@echo '    VERSION     The application version'
+	@echo 'Optional:'
+	@echo '    ALLTARGETS  The actual targets that will be built when the "all" target is selected, defaults to [desktop, arm]'
+	@echo '    COMPILER    The nim compiler to use, "c" by default'
+	@echo '    COMPRESS    If the final application should be compressed by upx or not, boolean value, false by default'
+	@echo '    DEBUG       Use debug build, have release build by default'
+	@echo '    EXECNAME    The executable name, $$NAME by default'
+	@echo '    NIMBLE      A list of extra nimble packed needed. If required, then podman/docker target should be called in advance'
+	@echo '    NIMOPTS     Extra nim compiler options'
+	@echo '    RUNARGS     The run arguments when "run" make target is used'
+	@echo '    STATIC      If the final application should be statically linked, boolean value, false by default'
+	@echo '    WINAPP      Type of windows application, valid values [gui,console], "console" by default'
 
 podman:	 ## If required, create specific podman containers to aid compiling this project
 	@if [ "${NIMBLE}" != "" ] ; then \
@@ -149,44 +166,68 @@ target/${EXECNAME}:${BUILDDEP}
 
 target/${EXECNAME}.osx:${BUILDDEP}
 	mkdir -p target
+	@echo "** WARNING ** static binaries not supported for macOS platform"
 	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAMEOSX} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${OSXNIMOPTS} --os:macosx --passC:'-mmacosx-version-min=10.7 -gfull' --passL:'-mmacosx-version-min=10.7 -dead_strip' ${NAME} && x86_64-apple-darwin19-strip ${NAME}"
 	mv ${NAME} target/${EXECNAME}.osx
 	# if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.osx ; fi # UPX is broken under OSX right now
 
 target/${EXECNAME}.linux:${BUILDDEP}
 	mkdir -p target
-	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${LINUXNIMOPTS} ${NAME} && strip ${NAME}"
+	CC=/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc ;\
+	CS=/cross/x86_64-linux-musl-cross/bin/x86_64-linux-musl-strip ;\
+	EXTRA="${LINUXNIMOPTS}" ;\
+	if [ "$(DOSTATIC)" = "t" ] ; then ASSTATIC="--gcc.exe:$$CC --gcc.linkerexe:$$CC --passL:-static" ; fi ;\
+	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} $$EXTRA $$ASSTATIC ${NAME} && $$CS ${NAME}"
 	mv ${NAME} target/${EXECNAME}.linux
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.linux ; fi
 
 target/${EXECNAME}.linux32:${BUILDDEP}
 	mkdir -p target
-	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME32} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${LINUXNIMOPTS} --cpu:i386 --passC:-m32 --passL:-m32 ${NAME} && strip ${NAME} ; if [ \"$(DOCOMPRESS)\" = \"t\" ] ; then upx --best ${NAME} ; fi"
+	CC=/cross/i686-linux-musl-cross/bin/i686-linux-musl-gcc ;\
+	CS=/cross/i686-linux-musl-cross/bin/i686-linux-musl-strip ;\
+	EXTRA="${LINUXNIMOPTS} --cpu:i386 --passC:-m32 --passL:-m32" ;\
+	if [ "$(DOSTATIC)" = "t" ] ; then ASSTATIC="--gcc.exe:$$CC --gcc.linkerexe:$$CC --passL:-static" ; fi ;\
+	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME32} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} $$EXTRA $$ASSTATIC ${NAME} && $$CS ${NAME}"
 	mv ${NAME} target/${EXECNAME}.linux32
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.linux32 ; fi
 
 target/${EXECNAME}.arm.linux:${BUILDDEP}
 	mkdir -p target
-	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${PINIMOPTS} --cpu:arm --os:linux ${NAME} && arm-linux-gnueabi-strip ${NAME}"
+	CC=/cross/armel-linux-musleabihf-cross/bin/armel-linux-musleabihf-gcc ;\
+	CS=/cross/armel-linux-musleabihf-cross/bin/armel-linux-musleabihf-strip ;\
+	EXTRA="${PINIMOPTS} --cpu:arm --os:linux" ;\
+	if [ "$(DOSTATIC)" = "t" ] ; then ASSTATIC="--gcc.exe:$$CC --gcc.linkerexe:$$CC --passL:-static " ; fi ;\
+	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} $$EXTRA $$ASSTATIC ${NAME} && $$CS ${NAME}"
 	mv ${NAME} target/${EXECNAME}.arm.linux
-	patchelf --set-interpreter /lib/ld-linux-armhf.so.3 target/${EXECNAME}.arm.linux
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.arm.linux ; fi
 
 target/${EXECNAME}.aarch64.linux:${BUILDDEP}
 	mkdir -p target
-	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${PINIMOPTS} --cpu:arm64 --os:linux ${NAME} && aarch64-linux-gnu-strip ${NAME}"
+	CC=/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc ;\
+	CS=/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip ;\
+	EXTRA="${PINIMOPTS} --cpu:arm64 --os:linux";\
+	if [ "$(DOSTATIC)" = "t" ] ; then ASSTATIC="--gcc.exe:$$CC --gcc.linkerexe:$$CC --passL:-static" ; fi ;\
+	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} $$EXTRA $$ASSTATIC ${NAME} && $$CS ${NAME}"
 	mv ${NAME} target/${EXECNAME}.aarch64.linux
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.aarch64.linux ; fi
 
 target/${EXECNAME}.32.exe:${BUILDDEP}
 	mkdir -p target
-	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${WINDOWSNIMOPTS} -d:mingw --cpu:i386  --app:${WINAPP} ${NAME} && i686-w64-mingw32-strip ${NAME}.exe"
+	CC=/cross/i686-w64-mingw32-cross/bin/i686-w64-mingw32-gcc ;\
+	CS=/cross/i686-w64-mingw32-cross/bin/i686-w64-mingw32-strip ;\
+	EXTRA="${WINDOWSNIMOPTS} -d:mingw --cpu:i386 --app:${WINAPP}" ;\
+	if [ "$(DOSTATIC)" = "t" ] ; then ASSTATIC="--gcc.exe:$$CC --gcc.linkerexe:$$CC --passL:-static" ; fi ;\
+	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} $$EXTRA $$ASSTATIC ${NAME} && $$CS ${NAME}".exe
 	mv ${NAME}.exe target/${EXECNAME}.32.exe
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.32.exe ; fi
 
 target/${EXECNAME}.64.exe:${BUILDDEP}
 	mkdir -p target
-	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} ${WINDOWSNIMOPTS} -d:mingw --cpu:amd64 --app:${WINAPP} ${NAME} && x86_64-w64-mingw32-strip ${NAME}.exe"
+	CC=/cross/x86_64-w64-mingw32-cross/bin/x86_64-w64-mingw32-gcc ;\
+	CS=/cross/x86_64-w64-mingw32-cross/bin/x86_64-w64-mingw32-strip ;\
+	EXTRA="${WINDOWSNIMOPTS} -d:mingw --cpu:amd64 --app:${WINAPP}" ;\
+	if [ "$(DOSTATIC)" = "t" ] ; then ASSTATIC="--gcc.exe:$$CC --gcc.linkerexe:$$CC --passL:-static" ; fi ;\
+	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAME} bash -c "${NIMVER} nim ${COMPILER} ${BASENIMOPTS} $$EXTRA $$ASSTATIC ${NAME} && $$CS ${NAME}".exe
 	mv ${NAME}.exe target/${EXECNAME}.64.exe
 	if [ "$(DOCOMPRESS)" = "t" ] ; then upx --best target/${EXECNAME}.64.exe ; fi
 

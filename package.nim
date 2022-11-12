@@ -83,7 +83,7 @@ proc createMacosPack(dmg_template, output_file, app, name:string, res:Resource, 
       kill("No DMG found in provided file")
     else: createDMGImpl("", output_file, app, name, sign, entitlements)
   else:
-    myexec "Create "&output_file.extractFilename, "docker", "run", "--rm",
+    myexec "Create "&output_file.extractFilename, podmanExec, "run", "--rm",
       "-v", app.parentDir&":/usr/src/app/src",
       "-v", output_file.parentDir&":/usr/src/app/dest",
       "crossmob/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
@@ -156,7 +156,7 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, timest
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
-  docker "", "-v", inst_res&":/work", "-v", app&":/work/app", "docker.io/amake/innosetup", "installer.iss"
+  podman "", "-v", inst_res&":/work", "-v", app&":/work/app", "docker.io/amake/innosetup", "installer.iss"
   moveFile inst_res / name & ".exe", output_file
   if sign:
     sign(@[os], output_file, "", p12file, timestamp, name, url)
@@ -179,11 +179,11 @@ Comment={descr}
   # Old version
   # let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
   # let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGKEY & "' `mktemp` ; "
-  # docker "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "docker.io/crossmob/appimage-builder",
+  # podman "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "docker.io/crossmob/appimage-builder",
   #   "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
   #   dockerChown (name.safe & ".appimage")
   let appdir = app.lastPathPart.safe
-  docker "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & appdir, "docker.io/crossmob/appimage-builder",
+  podman "", "-t", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & appdir, "docker.io/crossmob/appimage-builder",
     "bash", "-c", "export VERSION=" & version & " && /opt/appimage/AppRun " & appdir & dockerChown("*.AppImage")
   let produced =  inst_res.walkDir.toSeq.mapIt(it.path).filter(proc(x:string):bool = x.endsWith(".AppImage"))[0]  # get the actual target filename
   moveFile produced, output_file

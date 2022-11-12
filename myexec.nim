@@ -8,9 +8,10 @@ var GPGKEY*:string
 
 let UG_ID = when defined(windows): "1000:1000"
   else: $getuid() & ":" & $getgid()
-let podman = findExe("podman") != ""
+let asPodman = findExe("podman") != ""
+let podmanExec* = if asPodman: "podman" else: "docker"
 proc dockerChown*(file:string):string = 
-  if podman: "" else: " && chown " & UG_ID & " \"" & file & "\""
+  if asPodman: "" else: " && chown " & UG_ID & " \"" & file & "\""
 
 
 proc convert(cmd:varargs[string]):string =
@@ -50,6 +51,11 @@ proc myexec*(reason:string, cmd:varargs[string]):string {.discardable.} = myexec
 
 proc myexecprobably*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, cmd, false, true)
 
-proc docker*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, concat(@["docker", "run", "--rm"], @cmd), false)
+proc podmanImpl(reason:string, cmd:varargs[string], asUser:bool = false):string {.discardable.} =
+  if asPodman or not asUser:
+    myexecImpl(reason, concat(@[podmanExec, "run", "--rm"], @cmd), false)
+  else:
+    myexecImpl(reason, concat(@[podmanExec, "run", "--rm", "-u" & UG_ID], @cmd), false)
+proc podman*(reason:string, cmd:varargs[string]):string {.discardable.} = podmanImpl(reason, cmd, false)
+proc podmanUser*(reason:string, cmd:varargs[string]):string {.discardable.} = podmanImpl(reason, cmd, true)
 
-proc dockeru*(reason:string, cmd:varargs[string]):string {.discardable.} = myexecImpl(reason, concat(@["docker", "run", "--rm", "-u" & UG_ID], @cmd), false)
