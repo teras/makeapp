@@ -156,7 +156,7 @@ proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, timest
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
-  podman "", "-v", inst_res&":/work", "-v", app&":/work/app", "docker.io/amake/innosetup", "installer.iss"
+  podman "", "-v", inst_res&":/work", "-v", app&":/work/app", (if asPodman: "teras/innosetup" else: "amake/innosetup"), "installer.iss"
   moveFile inst_res / name & ".exe", output_file
   if sign:
     sign(@[os], output_file, "", p12file, timestamp, name, url)

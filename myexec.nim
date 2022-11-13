@@ -8,7 +8,7 @@ var GPGKEY*:string
 
 let UG_ID = when defined(windows): "1000:1000"
   else: $getuid() & ":" & $getgid()
-let asPodman = findExe("podman") != ""
+let asPodman* = findExe("podman") != ""
 let podmanExec* = if asPodman: "podman" else: "docker"
 proc dockerChown*(file:string):string = 
   if asPodman: "" else: " && chown " & UG_ID & " \"" & file & "\""
