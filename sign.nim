@@ -26,7 +26,7 @@ const DEFAULT_ENTITLEMENT = """
 
 proc getDefaultEntitlementFile*(): string = randomFile(DEFAULT_ENTITLEMENT)
 
-proc signFile(path:string, entitlements:string) =
+proc signFileMacOS(path:string, entitlements:string) =
   myexec "", "codesign", "--timestamp", "--force", "--verify", "--verbose", "--options", "runtime", "--sign", ID, "--entitlements", entitlements, path
   myexec "", "codesign", "-vvv", "--deep", "--strict", "--verbose", path
 
@@ -51,9 +51,9 @@ proc signMacOSImpl(path:string, entitlements:string, rootSign:bool): seq[string]
       if not rootSign: result.add file
   deferSign.sort  # That's a really dirty trick to handle signing requests. In reality we need dependency hierarchy priority.
   for deferred in deferSign:
-    signFile(deferred.full, entitlements)
+    signFileMacOS(deferred.full, entitlements)
   if rootSign:
-    signFile(path, entitlements)
+    signFileMacOS(path, entitlements)
 
 proc signMacOS(path:string, entitlements:string) =
   info "Sign " & (if path.dirExists: "app" else: "file") & " " & path.extractFilename
@@ -71,7 +71,7 @@ proc signWindows(os:OSType, target,p12file,timestamp,name,url:string) =
   myexecprobably "", "osslsigncode", "verify", target
   unsigned.removeFile
 
-proc sign*(os:seq[OSType], target, entitlements, p12file, timestamp, name, url:string) =
+proc signApp*(os:seq[OSType], target, entitlements, p12file, timestamp, name, url:string) =
   for cos in os:
     case cos:
       of pMacos:

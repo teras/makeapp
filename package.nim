@@ -13,7 +13,7 @@ proc findDmgDestination(dest,appname:string): string =
         found.add(file)
   kill("Unable to locate application \"" & appname & "\", found: " & join(found, ", "))
 
-proc createDMGImpl(givenDmg, output_file, app, name:string, sign:bool, entitlements:string)=
+proc createDMGImpl(os:OSType, givenDmg, output_file, app, name:string, noSign:seq[OSType], entitlements:string)=
   # Define destination mount point
   let volume = "/Volumes/" & randomFile().extractFilename
   let isDmgCustom = not givenDmg.fileExists
@@ -62,14 +62,15 @@ proc createDMGImpl(givenDmg, output_file, app, name:string, sign:bool, entitleme
     appdest.createDir
     info "Copy files"
     merge appdest, app
+  let sign = not noSign.contains(os)
   if sign:
-    sign(@[pMacos], appdest, entitlements, "", "", "", "")
+    signApp(@[pMacos], appdest, entitlements, "", "", "", "")
   myexec "Detach volume", "hdiutil", "detach", "-force", volume
   myexec "Compress volume", "hdiutil", "convert", srcdmg, "-format", "UDZO", "-imagekey", "zlib-level=9", "-ov", "-o", output_file
   if sign:
-    sign(@[pMacos], output_file, entitlements, "", "", "", "")
+    signApp(@[pMacos], output_file, entitlements, "", "", "", "")
 
-proc createMacosPack(dmg_template, output_file, app, name:string, res:Resource, sign:bool, entitlements: string) =
+proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res:Resource, noSign:seq[OSType], entitlements: string) =
   when defined(macosx):
     let dmg_template = if dmg_template=="": res.path("dmg_template.zip") else:dmg_template
     if dmg_template!="":
@@ -78,10 +79,10 @@ proc createMacosPack(dmg_template, output_file, app, name:string, res:Resource, 
       dmg_template.unzip(tempdir)
       for kind,path in tempdir.walkDir:
         if kind == pcFile and path.endsWith(".dmg"):
-          createDMGImpl(path, output_file, app, name, sign, entitlements)
+          createDMGImpl(os, path, output_file, app, name, noSign, entitlements)
           return
       kill("No DMG found in provided file")
-    else: createDMGImpl("", output_file, app, name, sign, entitlements)
+    else: createDMGImpl(os, "", output_file, app, name, noSign, entitlements)
   else:
     myexec "Create "&output_file.extractFilename, podmanExec, "run", "--rm",
       "-v", app.parentDir&":/usr/src/app/src",
@@ -152,16 +153,16 @@ Source:"app\*"; DestDir:"{app}"; Flags: recursesubdirs
   """
   return iss
 
-proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, timestamp:string, res:Resource, name, version, descr, url, vendor:string, sign:bool, associations:seq[Assoc]) =
+proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, timestamp:string, res:Resource, name, version, descr, url, vendor:string, noSign:seq[OSType], associations:seq[Assoc]) =
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
-  podman "", "-v", inst_res&":/work", "-v", app&":/work/app", (if asPodman: "docker.io/teras/innosetup" else: "docker.io/amake/innosetup"), "installer.iss"
+  podman "", "-v", inst_res&":/work", "-v", app&":/work/app", (if asPodman: "teras/innosetup" else: "amake/innosetup"), "installer.iss"
   moveFile inst_res / name & ".exe", output_file
-  if sign:
-    sign(@[os], output_file, "", p12file, timestamp, name, url)
+  if not noSign.contains(os):
+    signApp(@[os], output_file, "", p12file, timestamp, name, url)
 
-proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, version, descr, cat:string, sign:bool) =
+proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, version, descr, cat:string, noSign:seq[OSType]) =
   let inst_res = randomDir()
   let cname = name.toLowerAscii.safe
   var desktop = fmt"""[Desktop Entry]
@@ -179,11 +180,11 @@ Comment={descr}
   # Old version
   # let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
   # let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGKEY & "' `mktemp` ; "
-  # podman "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "docker.io/crossmob/appimage-builder",
+  # podman "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder",
   #   "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
   #   dockerChown (name.safe & ".appimage")
   let appdir = app.lastPathPart.safe
-  podman "", "-t", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & appdir, "docker.io/crossmob/appimage-builder",
+  podman "", "-t", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & appdir, "crossmob/appimage-builder",
     "bash", "-c", "export VERSION=" & version & " && /opt/appimage/AppRun " & appdir & dockerChown("*.AppImage")
   let produced =  inst_res.walkDir.toSeq.mapIt(it.path).filter(proc(x:string):bool = x.endsWith(".AppImage"))[0]  # get the actual target filename
   moveFile produced, output_file
@@ -192,7 +193,7 @@ Comment={descr}
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
 
-proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bool, entitlements, p12file, timestamp, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
+proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, noSign:seq[OSType], entitlements, p12file, timestamp, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
       app = checkParam(findApp(cos, if app != "": app else: getCurrentDir()), "No Application." & cos.appx & " found under " & (if app != "": app else: getCurrentDir()))
@@ -204,9 +205,9 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, sign:bo
     outdir.createDir
     info "Creating " & ($cos).capitalizeAscii & " installer"
     case cos:
-      of pMacos: createMacosPack(os_template, output_file, app, name, res, sign, entitlements)
-      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, timestamp, res, name, version, descr, url, vendor, sign, assoc)
-      of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, version, descr, cat, sign)
+      of pMacos: createMacosPack(cos, os_template, output_file, app, name, res, noSign, entitlements)
+      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, timestamp, res, name, version, descr, url, vendor, noSign, assoc)
+      of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, version, descr, cat, noSign)
       of pGeneric: createGenericPack(output_file, app)
 
 

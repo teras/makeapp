@@ -11,11 +11,11 @@ proc icon*(res:Resource, name:string, ostype:OSType):string =
   let png = res.path(name & ".png")
   if png=="": return ""
   if windowsTargets.contains(ostype):
-    podmanUser "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "docker.io/crossmob/appimage-builder", 
+    podmanUser "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "crossmob/appimage-builder", 
       "convert", "/data/base/"&name&".png", "/data/gen/"&name&".ico"
     return res.gen/name&".ico"
   elif ostype == pMacos:
-    podmanUser "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "docker.io/crossmob/appimage-builder", 
+    podmanUser "", "-v", res.base&":/data/base", "-v", res.gen&":/data/gen", "crossmob/appimage-builder", 
       "png2icns", "/data/gen/"&name&".icns", "/data/base/"&name&".png"
     return res.gen/name&".icns"
   return ""
@@ -64,9 +64,11 @@ proc contains*[T](a: openArray[T], items: openArray[T]): bool =
       return true
   return false
 
-proc checkPass*(config:Config, value,tag,error:string, os:seq[OSType], possibleOS:seq[OSType]):string =
+proc checkPass*(config:Config, value,tag,error:string, os:seq[OSType], possibleOS:seq[OSType], noSignOS:seq[OSType]):string =
   result = if value != "" : value else: getEnv(tag, config.getSectionValue("", tag))
-  if result=="" and contains(os, possibleOS): kill error
+  if result == "":
+    for current in os:
+      if possibleOS.contains(current) and not noSignOS.contains(current): kill error
 
 proc merge*(basedir:string, otherdir:string) =
   basedir.createDir
