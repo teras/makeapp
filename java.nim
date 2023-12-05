@@ -176,12 +176,33 @@ proc makeGeneric(output, name, version, input, jarname:string):string =
   writeFile launcherfile, """
 #!/bin/sh
 cd "`dirname \"$0\"`"
-java -jar """" & APPDIR & "/" & jarname & """"
+
+for p in "$@"; do
+  case "$p" in
+    -D*) JAVA_LAUNCHER_PARAM="$JAVA_LAUNCHER_PARAM $p" ;;
+      *) APPL_LAUNCHER_PARAM="$APPL_LAUNCHER_PARAM $p" ;;
+  esac
+done
+
+java $JAVA_LAUNCHER_PARAM -jar """" & APPDIR & "/" & jarname & """" $APPL_LAUNCHER_PARAM
 """
   launcherfile.makeExec
   writeFile dest / cname & ".bat", """
-@ECHO OFF
-start javaw -jar """" & APPDIR & "\\" & jarname & """"
+@echo off
+
+:loop
+if "%~1"=="" goto afterloop
+set "p=%~1"
+if "!p:~0,2!"=="-D" (
+    set "JAVA_LAUNCHER_PARAM=!JAVA_LAUNCHER_PARAM! %1"
+) else (
+    set "APPL_LAUNCHER_PARAM=!APPL_LAUNCHER_PARAM! %1"
+)
+shift
+goto loop
+
+:afterloop
+start javaw %JAVA_LAUNCHER_PARAM% -jar """" & APPDIR & "\\" & jarname & """" %APPL_LAUNCHER_PARAM%
 """
   return dest/APPDIR
 
