@@ -96,7 +96,7 @@ proc copyAppFiles(input, dest:string) {.inject.} =
     copyFile(input, dest/(input.extractFilename))
 
 proc extractRuntime(ostype:OSType, output:string) =
-  podman "Extract " & $ostype & " JRE", "-v", output & ":/target", "crossmob/jre", "sh", "-c" ,
+  podman "Extract " & $ostype & " JRE", "-v", output & ":/target", "teras/jre", "sh", "-c" ,
     "cp -a /java/" & ostype.jrearch & " /target" & " && mv /target/" & ostype.jrearch & " /target/runtime" & dockerChown("/target/runtime")
 
 proc makeWindows(output:string, res:Resource, name, version, input, jarname:string,
