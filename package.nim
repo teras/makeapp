@@ -1,6 +1,7 @@
-import myexec, nim_miniz, os, strutils, autos, sign, helper, types, sequtils, strformat
+import myexec, nim_miniz, os, strutils, autos, sign, helper, types, sequtils, strformat, sugar
 
 const BACKGROUND_DMG = when system.hostOS == "macosx": "background.jpg".readFile else:""
+const DMGCONV* = when not defined(macosx): ("dmg").staticRead else: ""
 
 proc findDmgDestination(dest,appname:string): string =
   var found:seq[string]
@@ -72,7 +73,7 @@ proc createDMGImpl(os:OSType, givenDmg, output_file, app, name:string, noSign:se
 
 proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res:Resource, noSign:seq[OSType], entitlements: string) =
   when defined(macosx):
-    let dmg_template = if dmg_template=="": res.path("dmg_template.zip") else:dmg_template
+    let dmg_template = if dmg_template=="": res.path("dmg_mac.zip") else:dmg_template
     if dmg_template!="":
       let tempdir = randomDir()
       info "Unzip template"
@@ -84,10 +85,50 @@ proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res
       kill("No DMG found in provided file")
     else: createDMGImpl(os, "", output_file, app, name, noSign, entitlements)
   else:
-    myexec "Create "&output_file.extractFilename, podmanExec, "run", "--rm",
-      "-v", app.parentDir&":/usr/src/app/src",
-      "-v", output_file.parentDir&":/usr/src/app/dest",
-      "teras/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
+    let dmg_template = if dmg_template=="": res.path("dmg_linux.zip") else:dmg_template
+    if dmg_template.isEmptyOrWhitespace :
+      echo dmg_template
+      myexec "Create "&output_file.extractFilename, podmanExec, "run", "--rm",
+        "-v", app.parentDir&":/usr/src/app/src",
+        "-v", output_file.parentDir&":/usr/src/app/dest",
+        "teras/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
+    else:
+      let output_file = if output_file.toLower.endsWith(".zip"): output_file[0..^5] & ".dmg" else: output_file
+      let workingDir = randomDir()
+      let mountdir = workingdir / "mount"
+      let datafiles = workingDir / "datafiles"
+      let image = workingDir / "image.dmg"
+      info "Unzip template"
+      mountdir.createDir()
+      dmg_template.unzip(datafiles)
+
+      let dmgcmd = mountdir & "/dmg"
+      let dmgf = open(dmgcmd, fmWrite) ; dmgf.write(DMGCONV) ; dmgf.close()
+      setFilePermissions(dmgcmd, {fpUserWrite, fpUserRead, fpUserExec})
+
+      if execShellCmd("truncate -s 200M " & quoteShell(image)) != 0 : kill("Unable to create image")
+      if execShellCmd("mkfs.hfsplus -v " & quoteShell(name) & " " & quoteShell(image)) != 0 : kill("Unable to run mkfs.hfsplus")
+      echo "** WARNING **"
+      echo "The following commands require elevated privileges."
+      echo "If privileges are not granted, the process can't continue."
+      if execShellCmd("sudo mount -o loop,rw " & quoteShell(image) & " " & quoteShell(mountdir)) != 0 : kill("Unable to mount image file")
+      echo "DMG mounted on " & mountdir & ". IMPORTANT!!!! Remember to unmount it if something goes wrong."
+
+      # Copy the template
+      let tempatefiles = collect(for k in walkDir(datafiles): quoteShell(k.path)).join(" ")
+      if execShellCmd("sudo cp -r " & tempatefiles & " " & quoteShell(mountdir)) != 0:
+        kill("Unable to copy template files. IMPORTANT! Please manually unmount " & mountdir)
+
+      # Copy the app file
+      let appdir = app.extractFilename
+      if execShellCmd("sudo rm -rf " & quoteShell(mountdir & "/" & appdir)) != 0:
+        kill("Unable to remove old file location " & appdir & ". IMPORTANT! Please manually unmount " & mountdir)
+      if execShellCmd("sudo cp -r " & quoteShell(app) & " " & quoteShell(mountdir & "/" & appdir)) != 0:
+        kill("Unable to copy application files. IMPORTANT! Please manually unmount " & mountdir)
+
+      if execShellCmd("sudo umount " & quoteShell(mountdir)) != 0 : kill("Unable to umount image file")
+      if execShellCmd(quoteShell(dmgcmd) & " " & quoteShell(image) & " " & output_file) != 0 : kill("Unable to compress image file")
+      workingDir.removeDir
 
 proc constructISS(os:OSType, app:string, res:Resource, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
   let icon = res.icon("install", os)

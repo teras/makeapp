@@ -90,13 +90,13 @@ template noSignImp =
   let noSign {.inject.} = findOS(opts.nosign)
 
 template signOpt() =
-  option("--signid", help="[🎯 macOS] The sign id, as given by `security find-identity -v -p codesigning`.")
-  option("--entitle", help="[🎯 macOS] Use the provided file as entitlements, defaults to a generic entitlements file.")
-  option("--p12file", help="[🎯 Windows] The p12 file containing the signing keys.")
-  option("--p12pass", help="[🎯 Windows] The password of the p12file.")
-  option("--timestamp", help="[🎯 Windows] Use a timestamp URL to timestamp the executable.")
-  option("--gpgdir", help="[🎯 Linux] The GnuPG directory containing the signing keys.")
-  option("--gpgkey", help="[🎯 Linux] The password of the GnuPG file.")
+  option("--signid", help=" The sign id, as given by `security find-identity -v -p codesigning`.")
+  option("--entitle", help="🍏 Use the provided file as entitlements, defaults to a generic entitlements file.")
+  option("--p12file", help=" The p12 file containing the signing keys.")
+  option("--p12pass", help="🪟 The password of the p12file.")
+  option("--timestamp", help="🪟 Use a timestamp URL to timestamp the executable.")
+  option("--gpgdir", help="🐧 The GnuPG directory containing the signing keys.")
+  option("--gpgkey", help="🐧 The password of the GnuPG file.")
 template signImp(keyfile:string) =
   let config = if keyfile != "" and keyfile.fileExists: loadConfig(keyfile) else: newConfig()
   ID = config.checkPass(opts.signid, NOTARIZE_SIGN_ID, "No sign id provided (--signid)", os, @[pMacos], noSign)
@@ -115,9 +115,9 @@ template signImp(keyfile:string) =
       elif not gpgdir.dirExists: kill "No GnuPG directory " & p12file & " exists"
 
 template sendOpt() =
-  option("--password", help="[🎯 macOS] The Apple password")
-  option("--user", help="[🎯 macOS] The Apple username")
-  option("--ascprovider", help="[🎯 macOS] The specific associated provider for the current Apple developer account")
+  option("--password", help="🍏 The Apple password")
+  option("--user", help="🍏 The Apple username")
+  option("--ascprovider", help="🍏 The specific associated provider for the current Apple developer account")
 template sendImp(strict:bool) =
   let config = if keyfile != "" and keyfile.fileExists: loadConfig(keyfile) else: newConfig()
   let ascprovider {.inject.} = if opts.ascprovider != "": opts.ascprovider else: getEnv(NOTARIZE_ASC_PROVIDER, config.getSectionValue("", NOTARIZE_ASC_PROVIDER))
@@ -261,7 +261,7 @@ Extras folder organization:
     ostypeOpt()
     noSignOpt()
     signOpt()
-    option("--notarize", help="[🎯 macOS] Notarize DMG application after creation, boolean value. Defaults to false")
+    option("--notarize", help="🍏 Notarize DMG application after creation, boolean value. Defaults to false")
     sendOpt()
     keyfileOpt()
     allOpt()
