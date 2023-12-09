@@ -1,6 +1,6 @@
 import tables, strutils,nim_miniz, autos,os
 
-const LAUNCHER* = ("Launcher").staticRead
+const LAUNCHER* = ("launcher.mac").staticRead
 # const APPLAUNCHERLIB* = ("libapplauncher.dylib").staticRead
 
 
