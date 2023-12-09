@@ -87,7 +87,7 @@ proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res
     myexec "Create "&output_file.extractFilename, podmanExec, "run", "--rm",
       "-v", app.parentDir&":/usr/src/app/src",
       "-v", output_file.parentDir&":/usr/src/app/dest",
-      "crossmob/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
+      "teras/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
 
 proc constructISS(os:OSType, app:string, res:Resource, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
   let icon = res.icon("install", os)
@@ -180,11 +180,11 @@ Comment={descr}
   # Old version
   # let runtime = if os==pLinuxArm32 or os==pLinuxArm64: "--runtime-file /opt/appimage/runtime-" & os.cpu else:""
   # let signcmd = if not sign: "" else: "gpg-agent --daemon; gpg2 --detach-sign --armor --pinentry-mode loopback --passphrase '" & GPGKEY & "' `mktemp` ; "
-  # podman "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "crossmob/appimage-builder",
+  # podman "", "-t", "-v", gpgdir&":/root/.gnupg", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & cname, "teras/appimage-builder",
   #   "bash", "-c", signcmd & "/opt/appimage/AppRun --comp xz " & runtime & " -v " & cname & (if sign:" --sign" else:"") & " -n " & name.safe & ".appimage" &
   #   dockerChown (name.safe & ".appimage")
   let appdir = app.lastPathPart.safe
-  podman "", "-t", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & appdir, "crossmob/appimage-builder",
+  podman "", "-t", "-v", inst_res&":/usr/src/app", "-v", app&":/usr/src/app/" & appdir, "teras/appimage-builder",
     "bash", "-c", "export VERSION=" & version & " && /opt/appimage/AppRun " & appdir & dockerChown("*.AppImage")
   let produced =  inst_res.walkDir.toSeq.mapIt(it.path).filter(proc(x:string):bool = x.endsWith(".AppImage"))[0]  # get the actual target filename
   moveFile produced, output_file

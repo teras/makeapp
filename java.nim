@@ -111,7 +111,7 @@ proc makeWindows(output:string, res:Resource, name, version, input, jarname:stri
   let longversion = "1.0.0.0"
   let execOut = randomDir()
   if icon != "": copyFile(icon, execOut / "appicon.ico")
-  podman "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
+  podman "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "teras/nimcross:javalauncher-src", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/windows -d:mingw -d:APPNAME=\"" & name & "\"" &
       " -d:COMPANY=\"" & vendor & "\" -d:DESCRIPTION=\"" & description & "\" -d:APPVERSION=" & version &
       " -d:LONGVERSION=" & longversion & " -d:COPYRIGHT=\"" & "(C) "&vendor & "\"" &
@@ -138,7 +138,7 @@ proc makeLinux(output:string, res:Resource, name, version, input, jarname:string
     elif ostype==pLinuxArm64:
       " && patchelf --set-interpreter /lib/ld-linux-aarch64.so.1 target/AppRun"
     else: ""
-  podman "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "crossmob/javalauncher", "bash", "-c",
+  podman "Create " & $ostype & " executable", "-v", execOut & ":/root/target", "teras/nimcross:javalauncher-src", "bash", "-c",
     "nim c -d:release --opt:size --passC:-Iinclude --passC:-Iinclude/linux " & compileFlags & " -d:JREPATH=runtime -d:JARPATH=" &
       APPDIR & "/" & jarname & " -o:target/AppRun javalauncher ; " & strip & " target/AppRun" & dockerChown("target/AppRun") & fixArm
   copyFileWithPermissions execOut / "AppRun", dest / "AppRun"
