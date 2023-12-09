@@ -97,7 +97,7 @@ arm64:target/${EXECNAME}.aarch64.linux	## Create only Linux ARM 32 target
 
 arm32:target/${EXECNAME}.arm.linux	## Create only Linux ARM 64 target
 
-mac:macintel macarm		## Create only macOS targets. These are macOS ARM 64 and Intel 64
+mac:target/${EXECNAME}.mac		## Create only macOS targets. These are fat macOS ARM 64 and Intel 64
 
 macintel:target/${EXECNAME}.macintel	## Create only macOS Intel 64 target
 
@@ -195,6 +195,9 @@ target/${EXECNAME}.macarm:${BUILDDEP}
 	mv ${NAME} target/${EXECNAME}.macarm
 	# if [ "$(DOCOMPRESS)" = "t" ] ; then podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAMEMAC} /usr/local/bin/upx --best ${EXECNAME} ; fi
 
+target/${EXECNAME}.mac:target/${EXECNAME}.macintel target/${EXECNAME}.macarm
+	podman run --rm -v `pwd`:/usr/src/app -w /usr/src/app ${DOCKERNAMEMAC} bash -c "lipo -create target/${NAME}.macarm target/${NAME}.macintel -output target/${NAME}.mac "
+
 target/${EXECNAME}:${BUILDDEP}
 	mkdir -p target
 	$(if $(findstring l,$(TYPEARG)), $(eval TYPEPARAM=--noMain:on --app:lib))
@@ -274,8 +277,6 @@ install: | all install-only		## Create and install binaries to default location
 install-only:	## Only install binaries, without rebuilding them
 	set -e ; mkdir -p ${DEST}/all
 	set -e ; rm -rf ${DEST}/all/${EXECNAME}.* ; rm -f ${DEST}/darwin-arm64/${EXECNAME} ${DEST}/darwin-x86_64/${EXECNAME} ${DEST}/linux-x86_64/${EXECNAME} ${DEST}/linux-i386/${EXECNAME} ${DEST}/linux-arm/${EXECNAME} ${DEST}/linux-aarch64/${EXECNAME} ${DEST}/windows-x86_64/${EXECNAME}.exe ${DEST}/windows-i686/${EXECNAME}.exe ${DEST}/windows-x86_64/${EXECNAME}.dll ${DEST}/windows-i686/${EXECNAME}.dll
-	set -e ; if [ -f target/${EXECNAME}.macarm        ] ; then mkdir -p ${DEST}/darwin-arm64   && cp target/${EXECNAME}.macarm        ${DEST}/all/ && ln -s ../all/${EXECNAME}.macarm        ${DEST}/darwin-arm64/${EXECNAME}       ; fi
-	set -e ; if [ -f target/${EXECNAME}.macintel      ] ; then mkdir -p ${DEST}/darwin-x86_64  && cp target/${EXECNAME}.macintel      ${DEST}/all/ && ln -s ../all/${EXECNAME}.macintel      ${DEST}/darwin-x86_64/${EXECNAME}      ; fi
 	set -e ; if [ -f target/${EXECNAME}.linux         ] ; then mkdir -p ${DEST}/linux-x86_64   && cp target/${EXECNAME}.linux         ${DEST}/all/ && ln -s ../all/${EXECNAME}.linux         ${DEST}/linux-x86_64/${EXECNAME}       ; fi
 	set -e ; if [ -f target/${EXECNAME}.linux32       ] ; then mkdir -p ${DEST}/linux-i386     && cp target/${EXECNAME}.linux32       ${DEST}/all/ && ln -s ../all/${EXECNAME}.linux32       ${DEST}/linux-i386/${EXECNAME}         ; fi
 	set -e ; if [ -f target/${EXECNAME}.arm.linux     ] ; then mkdir -p ${DEST}/linux-arm      && cp target/${EXECNAME}.arm.linux     ${DEST}/all/ && ln -s ../all/${EXECNAME}.arm.linux     ${DEST}/linux-arm/${EXECNAME}          ; fi
@@ -284,6 +285,9 @@ install-only:	## Only install binaries, without rebuilding them
 	set -e ; if [ -f target/${EXECNAME}.32.exe        ] ; then mkdir -p ${DEST}/windows-i686   && cp target/${EXECNAME}.32.exe        ${DEST}/all/ && ln -s ../all/${EXECNAME}.32.exe        ${DEST}/windows-i686/${EXECNAME}.exe   ; fi
 	set -e ; if [ -f target/${EXECNAME}.64.dll        ] ; then mkdir -p ${DEST}/windows-x86_64 && cp target/${EXECNAME}.64.dll        ${DEST}/all/ && ln -s ../all/${EXECNAME}.64.exe        ${DEST}/windows-x86_64/${EXECNAME}.exe ; fi
 	set -e ; if [ -f target/${EXECNAME}.32.dll        ] ; then mkdir -p ${DEST}/windows-i686   && cp target/${EXECNAME}.32.dll        ${DEST}/all/ && ln -s ../all/${EXECNAME}.32.exe        ${DEST}/windows-i686/${EXECNAME}.exe   ; fi
+	set -e ; if [ -f target/${EXECNAME}.macarm        ] ; then mkdir -p ${DEST}/darwin-arm64   && cp target/${EXECNAME}.macarm        ${DEST}/all/ && ln -s ../all/${EXECNAME}.macarm        ${DEST}/darwin-arm64/${EXECNAME}       ; fi
+	set -e ; if [ -f target/${EXECNAME}.macintel      ] ; then mkdir -p ${DEST}/darwin-x86_64  && cp target/${EXECNAME}.macintel      ${DEST}/all/ && ln -s ../all/${EXECNAME}.macintel      ${DEST}/darwin-x86_64/${EXECNAME}      ; fi
+	set -e ; if [ -f target/${EXECNAME}.mac           ] ; then mkdir -p ${DEST}/darwin         && cp target/${EXECNAME}.mac           ${DEST}/all/ && ln -s ../all/${EXECNAME}.mac           ${DEST}/darwin/${EXECNAME}             ; fi
 
 run:local	## Run the executable based on the config property $RUNARGS
 	./target/${EXECNAME} ${RUNARGS}
