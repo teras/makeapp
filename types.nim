@@ -17,7 +17,7 @@ proc `$`*(ostype:OSType):string = system.`$`(ostype).substr(1).toLowerAscii
 proc typesList*():string = OSType.mapIt($it).join(", ")
 
 proc jrearch*(ostype:OSType):string = return case ostype:
-  of pMacos: "osx64"
+  of pMacos: "macin"
   of pWin32: "win32"
   of pWin64: "win64"
   of pLinux64: "lin64"
