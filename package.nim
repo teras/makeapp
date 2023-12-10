@@ -112,7 +112,7 @@ proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res
       setFilePermissions(dmgcmd, {fpUserWrite, fpUserRead, fpUserExec})
 
       if execShellCmd("truncate -s 200M " & quoteShell(image)) != 0 : kill("Unable to create image")
-      if execShellCmd("mkfs.hfsplus -v " & quoteShell(name) & " " & quoteShell(image)) != 0 : kill("Unable to run mkfs.hfsplus")
+      podman "", "-t", "-v",  image&":/image.dmg", "teras/appimage-builder", "mkfs.hfs" , "-v", name, "/image.dmg"
       echo "** WARNING **"
       echo "The following commands require elevated privileges."
       echo "If privileges are not granted, the process can't continue."
