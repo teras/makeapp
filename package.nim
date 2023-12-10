@@ -71,6 +71,11 @@ proc createDMGImpl(os:OSType, givenDmg, output_file, app, name:string, noSign:se
   if sign:
     signApp(@[pMacos], output_file, entitlements, "", "", "", "")
 
+proc unmount(failmessage:string, mountdir:string) =
+  if execShellCmd("sudo umount " & quoteShell(mountdir)) != 0 :
+    echo "Unable to umount image! Please manually unmount " & mountdir
+  kill failmessage
+
 proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res:Resource, noSign:seq[OSType], entitlements: string) =
   when defined(macosx):
     let dmg_template = if dmg_template=="": res.path("dmg_mac.zip") else:dmg_template
@@ -112,21 +117,23 @@ proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res
       echo "The following commands require elevated privileges."
       echo "If privileges are not granted, the process can't continue."
       if execShellCmd("sudo mount -o loop,rw " & quoteShell(image) & " " & quoteShell(mountdir)) != 0 : kill("Unable to mount image file")
-      echo "DMG mounted on " & mountdir & ". IMPORTANT!!!! Remember to unmount it if something goes wrong."
+      echo "DMG mounted on " & mountdir & "."
 
       # Copy the template
       let tempatefiles = collect(for k in walkDir(datafiles): quoteShell(k.path)).join(" ")
       if execShellCmd("sudo cp -r " & tempatefiles & " " & quoteShell(mountdir)) != 0:
-        kill("Unable to copy template files. IMPORTANT! Please manually unmount " & mountdir)
+        unmount("Unable to copy template files", mountdir)
 
       # Copy the app file
       let appdir = app.extractFilename
-      if execShellCmd("sudo rm -rf " & quoteShell(mountdir & "/" & appdir)) != 0:
-        kill("Unable to remove old file location " & appdir & ". IMPORTANT! Please manually unmount " & mountdir)
+      if execShellCmd("sudo rm -rf " & quoteShell(mountdir & "/" & appdir) & " " & quoteShell(mountdir & "/Applications") )!= 0:
+        unmount("Unable to remove old file location " & appdir, mountdir)
       if execShellCmd("sudo cp -r " & quoteShell(app) & " " & quoteShell(mountdir & "/" & appdir)) != 0:
-        kill("Unable to copy application files. IMPORTANT! Please manually unmount " & mountdir)
+        unmount("Unable to copy application files", mountdir)
+      if execShellCmd("sudo ln -s /Applications " & quoteShell(mountdir)) != 0:
+        unmount("Unable to link /Applications folder", mountdir)
 
-      if execShellCmd("sudo umount " & quoteShell(mountdir)) != 0 : kill("Unable to umount image file")
+      if execShellCmd("sudo umount " & quoteShell(mountdir)) != 0 : kill("Unable to umount image file at " & mountdir)
       if execShellCmd(quoteShell(dmgcmd) & " " & quoteShell(image) & " " & output_file) != 0 : kill("Unable to compress image file")
       workingDir.removeDir
 

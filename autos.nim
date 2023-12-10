@@ -38,7 +38,7 @@ proc randomDir*():string =
   result.deleteLater
 
 proc terminate(message:string, error=true, quiet:bool) =
-  if not error and not KEEPONERROR: deleteNow()
+  if not error or not KEEPONERROR: deleteNow()
   if not quiet: info (if error:"** Error" else:"Success") & (if message!="": ": " & message else:"")
   quit(if error:1 else:0)
 
