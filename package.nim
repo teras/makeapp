@@ -71,10 +71,19 @@ proc createDMGImpl(os:OSType, givenDmg, output_file, app, name:string, noSign:se
   if sign:
     signApp(@[pMacos], output_file, entitlements, "", "", "", "")
 
-proc unmount(failmessage:string, mountdir:string) =
-  if execShellCmd("sudo umount " & quoteShell(mountdir)) != 0 :
-    echo "Unable to umount image! Please manually unmount " & mountdir
-  kill failmessage
+proc mountWithUDiskCtrl(image:string):string =
+  let devWithDot = myexec("", "udisksctl", "loop-setup", "--file", image).split(" as ")[1]
+  let lastDotIndex = devWithDot.rfind(".")
+  let devname = devWithDot[0..(lastDotIndex-1)]
+  for i in 1..50:
+    let infoOut = myexec("", "udisksctl", "info", "-b", devname).splitlines()
+    let mountpoints = infoOut.findSubstring("MountPoints:").strip()[12..^1].strip()
+    if (mountpoints.len==0):
+      sleep(100)
+    else:
+      if image notin infoOut.findSubstring("BackingFile:"): kill "Device " & devname & " doesn't seem to mount file " & image
+      return mountpoints
+  kill "Wait timeout for mounted disk " & image
 
 proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res:Resource, noSign:seq[OSType], entitlements: string) =
   when defined(macosx):
@@ -98,44 +107,33 @@ proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res
         "-v", output_file.parentDir&":/usr/src/app/dest",
         "teras/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
     else:
-      let output_file = if output_file.toLower.endsWith(".zip"): output_file[0..^5] & ".dmg" else: output_file
-      let workingDir = randomDir()
-      let mountdir = workingdir / "mount"
-      let datafiles = workingDir / "datafiles"
-      let image = workingDir / "image.dmg"
-      info "Unzip template"
-      mountdir.createDir()
+      if not output_file.endsWith(".zip") : kill("The reqested MacOS file should end with .zip. Please revise script.")
+      let stripped_file = output_file[0..^5]
+      let output_file = stripped_file & ".dmg"
+      let image = stripped_file & ".uncompressed.dmg"
+      let datafiles = randomDir()
+      output_file.removeFile
+      image.removeFile
+      # Start procedure
       dmg_template.unzip(datafiles)
-
-      let dmgcmd = mountdir & "/dmg"
-      let dmgf = open(dmgcmd, fmWrite) ; dmgf.write(DMGCONV) ; dmgf.close()
-      setFilePermissions(dmgcmd, {fpUserWrite, fpUserRead, fpUserExec})
-
-      if execShellCmd("truncate -s 200M " & quoteShell(image)) != 0 : kill("Unable to create image")
-      podman "", "-t", "-v",  image&":/image.dmg", "teras/appimage-builder", "mkfs.hfs" , "-v", name, "/image.dmg"
-      echo "** WARNING **"
-      echo "The following commands require elevated privileges."
-      echo "If privileges are not granted, the process can't continue."
-      if execShellCmd("sudo mount -o loop,rw " & quoteShell(image) & " " & quoteShell(mountdir)) != 0 : kill("Unable to mount image file")
-      echo "DMG mounted on " & mountdir & "."
-
-      # Copy the template
-      let tempatefiles = collect(for k in walkDir(datafiles): quoteShell(k.path)).join(" ")
-      if execShellCmd("sudo cp -r " & tempatefiles & " " & quoteShell(mountdir)) != 0:
-        unmount("Unable to copy template files", mountdir)
-
-      # Copy the app file
-      let appdir = app.extractFilename
-      if execShellCmd("sudo rm -rf " & quoteShell(mountdir & "/" & appdir) & " " & quoteShell(mountdir & "/Applications") )!= 0:
-        unmount("Unable to remove old file location " & appdir, mountdir)
-      if execShellCmd("sudo cp -r " & quoteShell(app) & " " & quoteShell(mountdir & "/" & appdir)) != 0:
-        unmount("Unable to copy application files", mountdir)
-      if execShellCmd("sudo ln -s /Applications " & quoteShell(mountdir)) != 0:
-        unmount("Unable to link /Applications folder", mountdir)
-
-      if execShellCmd("sudo umount " & quoteShell(mountdir)) != 0 : kill("Unable to umount image file at " & mountdir)
-      if execShellCmd(quoteShell(dmgcmd) & " " & quoteShell(image) & " " & output_file) != 0 : kill("Unable to compress image file")
-      workingDir.removeDir
+      myexec "", "truncate", "-s", "200M", image
+      podman "", "-t", "-v",  image & ":/image.dmg", "teras/appimage-builder", "mkfs.hfsplus" , "-v", name, "/image.dmg"
+      let mountdir = mountWithUDiskCtrl(image)
+      # Copy template & app files
+      merge mountdir, datafiles
+      (mountdir/app.extractFilename).createDir
+      merge mountdir/app.extractFilename, app
+      # Recreate symlink to /Applications
+      (mountdir/"Applications").removeFile
+      myexec "", "ln", "-s", "/Applications", mountdir
+      # unmount, compress and remove uncompressed file
+      myexec "", "umount", mountdir
+      podman "", "-t",
+        "-v", output_file.parentDir & ":/data",
+        "teras/appimage-builder", "dmg" ,
+        "/data/" & image.extractFilename,
+        "/data/" & output_file.extractFilename
+      image.removeFile
 
 proc constructISS(os:OSType, app:string, res:Resource, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
   let icon = res.icon("install", os)

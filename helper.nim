@@ -34,6 +34,10 @@ proc findFile(base:string, ext:string): string =
       return file
   return ""
 
+proc findSubstring*(list:seq[string], what:string):string =
+  for s in list:
+    if what in s: return s
+  return ""
 
 proc findDmg*(base:string) : string = findFile(base, "dmg")
 proc findZip*(base:string) : string = findFile(base, "zip")
