@@ -2,8 +2,9 @@ import strutils, osproc, autos, sequtils, posix, os
 
 var USER*:string
 var PASSWORD*:string
-var ID*:string
+var P12FILE*:string
 var P12PASS*:string
+var NOTARY*:string
 var GPGKEY*:string
 
 let UG_ID = when defined(windows): "1000:1000"
@@ -24,7 +25,6 @@ proc convert(cmd:varargs[string]):string =
 proc myexecImpl(reason:string, cmd:varargs[string], quiet:bool, canfail=false):string =
   let cmd = cmd.convert
   proc printCmd() = echo "▹▹ " & (if VERBOCITY>=3: cmd else: cmd
-    .replace(ID, "[ID]")
     .replace(USER, "[USER]")
     .replace(PASSWORD, "[PASSWORD]")
     .replace(P12PASS, "[P12PASS]")

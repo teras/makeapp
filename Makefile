@@ -185,13 +185,18 @@ docker:	 ## If required, create specific docker containers to aid compiling this
         rm -rf docker.tmp ; \
 	fi
 
-srccontainer:${BUILDDEP}
+srccontainer:${BUILDDEP} ## Create source containers (with this project source files)
 	echo -e "ARG BASE_IMAGE\nFROM \$$BASE_IMAGE \nCOPY ${SRCCONTFILES} *.nim /root" >${TEMPCONT}
 	for entry in ${SRCCONTDIRS}; do echo COPY $$entry /root/$$entry >>${TEMPCONT}; done
 	podman build -t ${CONTAINER}-src -f ${TEMPCONT} --build-arg BASE_IMAGE=${CONTAINER}
 	podman build -t ${CONTAINER32}-src -f ${TEMPCONT} --build-arg BASE_IMAGE=${CONTAINER32}
 	podman build -t ${CONTAINERMAC}-src -f ${TEMPCONT} --build-arg BASE_IMAGE=${CONTAINERMAC}
 	rm ${TEMPCONT}
+
+srcpush:srccontainer	## Create and push source containers.
+	podman push ${CONTAINER}-src
+	podman push ${CONTAINER32}-src
+	podman push ${CONTAINERMAC}-src
 
 target/${EXECNAME}.macintel:${BUILDDEP}
 	mkdir -p target

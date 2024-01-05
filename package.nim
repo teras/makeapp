@@ -1,4 +1,4 @@
-import myexec, nim_miniz, os, strutils, autos, sign, helper, types, sequtils, strformat, sugar
+import myexec, nim_miniz, os, strutils, autos, sign, helper, types, sequtils, strformat
 
 const BACKGROUND_DMG = when system.hostOS == "macosx": "background.jpg".readFile else:""
 const DMGCONV* = when not defined(macosx): ("dmg").staticRead else: ""
@@ -14,62 +14,6 @@ proc findDmgDestination(dest,appname:string): string =
         found.add(file)
   kill("Unable to locate application \"" & appname & "\", found: " & join(found, ", "))
 
-proc createDMGImpl(os:OSType, givenDmg, output_file, app, name:string, noSign:seq[OSType], entitlements:string)=
-  # Define destination mount point
-  let volume = "/Volumes/" & randomFile().extractFilename
-  let isDmgCustom = not givenDmg.fileExists
-  let srcdmg = if isDmgCustom: randomFile() & ".dmg" else: givenDmg
-
-  # Attach destination volume
-  myexecQuiet "Detach old volume if any", "hdiutil", "detach", volume
-  if isDmgCustom:
-    let size = myexec("", "du", "-sk", app).splitWhitespace[0].parseInt + 1000
-    myexec "Create new DMG file", "hdiutil", "create", "-volname", name, "-fs", "HFS+", "-size", $size&"k" , "-srcfolder", app, "-fsargs", "-c c=64,a=16,e=16", "-format", "UDRW", srcdmg
-  myexec "Attach volume", "hdiutil", "attach", "-readwrite", "-noverify", "-noautoopen", "-mountpoint", volume, srcdmg
-  delegateLater(proc () =
-    if volume.dirExists: myexec "Detach volume", "hdiutil", "detach", "-force", volume
-  )
-  let appdest = findDmgDestination(volume, app.extractFilename)
-  if isDmgCustom:
-    createSymlink("/Applications", volume / "Applications")
-    let backgroundDir = volume / ".background"
-    backgroundDir.createDir
-    (backgroundDir / "background.jpg").writeFile BACKGROUND_DMG
-    let osascript = randomFile()
-    osascript.writeFile """
-      tell application "Finder"
-        tell disk """" & volume.extractFilename & """"
-          open
-          set current view of container window to icon view
-          set toolbar visible of container window to false
-          set statusbar visible of container window to false
-          set the bounds of container window to {400, 100, 820, 440}
-          set viewOptions to the icon view options of container window
-          set arrangement of viewOptions to not arranged
-          set icon size of viewOptions to 92
-          set background picture of viewOptions to file ".background:background.jpg"
-          set position of item """" & name & """.app" of container window to {95, 175}
-          set position of item "Applications" of container window to {330, 175}
-          close
-          open
-          update without registering applications
-          delay 2
-        end tell
-      end tell"""
-    myexec "Fix locations", "osascript", osascript
-    myexec "", "sync"
-  else:
-    appdest.removeDir
-    appdest.createDir
-    info "Copy files"
-    merge appdest, app
-  let sign = not noSign.contains(os)
-  if sign:
-    signApp(@[pMacos], appdest, entitlements, "", "", "", "")
-  myexec "Detach volume", "hdiutil", "detach", "-force", volume
-  myexec "Compress volume", "hdiutil", "convert", srcdmg, "-format", "UDZO", "-imagekey", "zlib-level=9", "-ov", "-o", output_file
-  if sign:
-    signApp(@[pMacos], output_file, entitlements, "", "", "", "")
 
 proc mountWithUDiskCtrl(image:string):string =
   let devWithDot = myexec("", "udisksctl", "loop-setup", "--file", image).split(" as ")[1]
@@ -83,57 +27,51 @@ proc mountWithUDiskCtrl(image:string):string =
     else:
       if image notin infoOut.findSubstring("BackingFile:"): kill "Device " & devname & " doesn't seem to mount file " & image
       return mountpoints
-  kill "Wait timeout for mounted disk " & image
+  kill "Wait timeout for mounted disk " & image & " - maybe kernel support for hfsplus is missing?"
 
-proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res:Resource, noSign:seq[OSType], entitlements: string) =
-  when defined(macosx):
-    let dmg_template = if dmg_template=="": res.path("dmg_mac.zip") else:dmg_template
-    if dmg_template!="":
-      let tempdir = randomDir()
-      info "Unzip template"
-      dmg_template.unzip(tempdir)
-      for kind,path in tempdir.walkDir:
-        if kind == pcFile and path.endsWith(".dmg"):
-          createDMGImpl(os, path, output_file, app, name, noSign, entitlements)
-          return
-      kill("No DMG found in provided file")
-    else: createDMGImpl(os, "", output_file, app, name, noSign, entitlements)
+proc createMacosPack(os:OSType, dmg_template, output_file, app, name:string, res:Resource, noSign:seq[OSType]) =
+  let dmg_template = if dmg_template=="": res.path("dmg_linux.zip") else:dmg_template
+  if dmg_template.isEmptyOrWhitespace :
+    echo dmg_template
+    myexec "Create "&output_file.extractFilename, podmanExec, "run", "--rm",
+      "-v", app.parentDir&":/usr/src/app/src",
+      "-v", output_file.parentDir&":/usr/src/app/dest",
+      "teras/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
   else:
-    let dmg_template = if dmg_template=="": res.path("dmg_linux.zip") else:dmg_template
-    if dmg_template.isEmptyOrWhitespace :
-      echo dmg_template
-      myexec "Create "&output_file.extractFilename, podmanExec, "run", "--rm",
-        "-v", app.parentDir&":/usr/src/app/src",
-        "-v", output_file.parentDir&":/usr/src/app/dest",
-        "teras/appimage-builder", "makemac.sh", app.extractFilename, output_file.extractFilename
-    else:
-      if not output_file.endsWith(".zip") : kill("The reqested MacOS file should end with .zip. Please revise script.")
-      let stripped_file = output_file[0..^5]
-      let output_file = stripped_file & ".dmg"
-      let image = stripped_file & ".uncompressed.dmg"
-      let datafiles = randomDir()
-      output_file.removeFile
-      image.removeFile
-      # Start procedure
-      dmg_template.unzip(datafiles)
-      myexec "", "truncate", "-s", "200M", image
-      podman "", "-t", "-v",  image & ":/image.dmg", "teras/appimage-builder", "mkfs.hfsplus" , "-v", name, "/image.dmg"
-      let mountdir = mountWithUDiskCtrl(image)
-      # Copy template & app files
-      merge mountdir, datafiles
-      (mountdir/app.extractFilename).createDir
-      merge mountdir/app.extractFilename, app
-      # Recreate symlink to /Applications
-      (mountdir/"Applications").removeFile
-      myexec "", "ln", "-s", "/Applications", mountdir
-      # unmount, compress and remove uncompressed file
-      myexec "", "umount", mountdir
-      podman "", "-t",
-        "-v", output_file.parentDir & ":/data",
-        "teras/appimage-builder", "dmg" ,
-        "/data/" & image.extractFilename,
-        "/data/" & output_file.extractFilename
-      image.removeFile
+    if not output_file.endsWith(".zip") : kill("The reqested MacOS file should end with .zip. Please revise script.")
+    let stripped_file = output_file[0..^5]
+    let output_file = stripped_file & ".dmg"
+    let image = stripped_file & ".uncompressed.dmg"
+    let datafiles = randomDir()
+    let shouldSign = not noSign.contains(os)
+    output_file.removeFile
+    image.removeFile
+    # Start procedure
+    dmg_template.unzip(datafiles)
+    myexec "", "truncate", "-s", "200M", image
+    podman "", "-t", "-v",  image & ":/image.dmg", "teras/appimage-builder", "mkfs.hfsplus" , "-v", name, "/image.dmg"
+    let mountdir = mountWithUDiskCtrl(image)
+    let appDirName = mountdir/app.extractFilename
+    # Copy template & app files
+    merge mountdir, datafiles
+    appDirName.createDir
+    merge appDirName, app
+    if shouldSign: signMacOS appDirName
+    # Recreate symlink to /Applications
+    (mountdir/"Applications").removeFile
+    myexec "", "ln", "-s", "/Applications", mountdir
+    # unmount, compress and remove uncompressed file
+    myexec "", "umount", mountdir
+    podman "", "-t",
+      "-v", output_file.parentDir & ":/data",
+      "teras/appimage-builder", "dmg" ,
+      "/data/" & image.extractFilename,
+      "/data/" & output_file.extractFilename
+    image.removeFile
+    if shouldSign:
+      signMacOS output_file
+      notarizeMacOS output_file
+
 
 proc constructISS(os:OSType, app:string, res:Resource, inst_res, name, version, url, vendor:string, associations:seq[Assoc]):string =
   let icon = res.icon("install", os)
@@ -199,14 +137,14 @@ Source:"app\*"; DestDir:"{app}"; Flags: recursesubdirs
   """
   return iss
 
-proc createWindowsPack(os:OSType, os_template, output_file, app, p12file, timestamp:string, res:Resource, name, version, descr, url, vendor:string, noSign:seq[OSType], associations:seq[Assoc]) =
+proc createWindowsPack(os:OSType, os_template, output_file, app, timestamp:string, res:Resource, name, version, descr, url, vendor:string, noSign:seq[OSType], associations:seq[Assoc]) =
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
   podman "", "-v", inst_res&":/work", "-v", app&":/work/app", (if asPodman: "teras/innosetup" else: "amake/innosetup"), "installer.iss"
   moveFile inst_res / name & ".exe", output_file
   if not noSign.contains(os):
-    signApp(@[os], output_file, "", p12file, timestamp, name, url)
+    signApp(@[os], output_file, timestamp, name, url)
 
 proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, version, descr, cat:string, noSign:seq[OSType]) =
   let inst_res = randomDir()
@@ -239,7 +177,7 @@ Comment={descr}
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
 
-proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, noSign:seq[OSType], entitlements, p12file, timestamp, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
+proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, noSign:seq[OSType], timestamp, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
       app = checkParam(findApp(cos, if app != "": app else: getCurrentDir()), "No Application." & cos.appx & " found under " & (if app != "": app else: getCurrentDir()))
@@ -251,8 +189,8 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, noSign:
     outdir.createDir
     info "Creating " & ($cos).capitalizeAscii & " installer"
     case cos:
-      of pMacos: createMacosPack(cos, os_template, output_file, app, name, res, noSign, entitlements)
-      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, p12file, timestamp, res, name, version, descr, url, vendor, noSign, assoc)
+      of pMacos: createMacosPack(cos, os_template, output_file, app, name, res, noSign)
+      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, timestamp, res, name, version, descr, url, vendor, noSign, assoc)
       of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, version, descr, cat, noSign)
       of pGeneric: createGenericPack(output_file, app)
 
