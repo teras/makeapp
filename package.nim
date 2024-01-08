@@ -137,16 +137,16 @@ Source:"app\*"; DestDir:"{app}"; Flags: recursesubdirs
   """
   return iss
 
-proc createWindowsPack(os:OSType, os_template, output_file, app, timestamp:string, res:Resource, name, version, descr, url, vendor:string, noSign:seq[OSType], associations:seq[Assoc]) =
+proc createWindowsPack(os:OSType, os_template, output_file, app: string, res:Resource, name, version, descr, url, vendor:string, noSign:seq[OSType], associations:seq[Assoc]) =
   let inst_res = randomDir()
   let issContent = if os_template=="": constructISS(os, app, res, inst_res, name, version, url, vendor, associations) else: readFile(os_template)
   writeFile(inst_res / "installer.iss", issContent)
   podman "", "-v", inst_res&":/work", "-v", app&":/work/app", (if asPodman: "teras/innosetup" else: "amake/innosetup"), "installer.iss"
   moveFile inst_res / name & ".exe", output_file
   if not noSign.contains(os):
-    signApp(@[os], output_file, timestamp, name, url)
+    signApp(@[os], output_file, name)
 
-proc createLinuxPack(os:OSType, output_file, gpgdir:string, res:Resource, app, name, version, descr, cat:string, noSign:seq[OSType]) =
+proc createLinuxPack(os:OSType, output_file:string, res:Resource, app, name, version, descr, cat:string, noSign:seq[OSType]) =
   let inst_res = randomDir()
   let cname = name.toLowerAscii.safe
   var desktop = fmt"""[Desktop Entry]
@@ -177,7 +177,7 @@ Comment={descr}
 proc createGenericPack(output_file, app:string) =
   myexec "", "tar", "jcvf", output_file, "-C", app.parentDir, app.extractFilename
 
-proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, noSign:seq[OSType], timestamp, gpgdir:string, res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
+proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, noSign:seq[OSType], res:Resource, name, version, descr, url, vendor, cat:string, assoc:seq[Assoc]) =
   for cos in os:
     let
       app = checkParam(findApp(cos, if app != "": app else: getCurrentDir()), "No Application." & cos.appx & " found under " & (if app != "": app else: getCurrentDir()))
@@ -190,8 +190,8 @@ proc createPack*(os:seq[OSType], os_template:string, outdir, app:string, noSign:
     info "Creating " & ($cos).capitalizeAscii & " installer"
     case cos:
       of pMacos: createMacosPack(cos, os_template, output_file, app, name, res, noSign)
-      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, timestamp, res, name, version, descr, url, vendor, noSign, assoc)
-      of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, gpgdir, res, app, name, version, descr, cat, noSign)
+      of pWin32, pWin64: createWindowsPack(cos, os_template, output_file, app, res, name, version, descr, url, vendor, noSign, assoc)
+      of pLinuxArm32, pLinuxArm64, pLinux64: createLinuxPack(cos, output_file, res, app, name, version, descr, cat, noSign)
       of pGeneric: createGenericPack(output_file, app)
 
 

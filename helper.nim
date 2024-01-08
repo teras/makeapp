@@ -88,4 +88,12 @@ proc merge*(basedir:string, otherdir:string) =
 
 proc safe*(name:string):string {.inline.}= name.replace(' ','_')
 
+proc readContent*(file, descr:string):string =
+  if file == "": kill "No " & descr & " file provided"
+  elif not file.fileExists: kill "No " & descr & " file exists under " & file
+  let lines = file.readLines(1)
+  if lines.len != 1: kill "More than one line found in " & descr & " file " & file
+  result = lines[0].strip
+  if result.len == 0: kill "THe data of " & descr & " file " & file & " is empty"
+
 template makeExec*(file:string) = file.inclFilePermissions({FilePermission.fpUserExec, FilePermission.fpGroupExec})

@@ -1,12 +1,5 @@
-import parsecfg, plists, argparse, sets, strutils, types
-import sendtoapple, sign, helper, myexec, package, autos, java
-
-const NOTARIZE_APP_PASSWORD = "NOTARIZE_APP_PASSWORD"
-const NOTARIZE_USER         = "NOTARIZE_USER"
-const NOTARIZE_ASC_PROVIDER = "NOTARIZE_ASC_PROVIDER"
-const NOTARIZE_SIGN_ID      = "NOTARIZE_SIGN_ID"
-const SIGN_P12_PASS         = "SIGN_P12_PASS"
-const GPG_KEY_VAR           = "GPG_KEY"
+import plists, argparse, sets, strutils, types
+import sign, helper, myexec, package, autos, java
 
 const VERSION {.strdefine.}: string = ""
 
@@ -79,7 +72,7 @@ template javaImp(name:string) =
         ""
     extra {.inject.} = opts.extra
     jvmopts {.inject.} = getJvmOpts(opts.jvmopt)
-    id {.inject.} = if opts.id == "": constructId(url,vendor, name) else: opts.id
+    id {.inject.} = if opts.id == "": constructId(url, vendor, name) else: opts.id
     jdk {.inject.} = opts.jdk
   if not jarname.toLowerAscii.endsWith(".jar"):
     kill "JAR file should end with \".jar\" extension, given: " & jarname
@@ -90,46 +83,32 @@ template noSignImp =
   let noSign {.inject.} = findOS(opts.nosign)
 
 template signOpt() =
-  option("--signid", help=" The sign id, as given by `security find-identity -v -p codesigning`.")
   option("--p12file", help="🍏 The p12 file containing the signing keys.")
   option("--p12pass", help="🍏 The file containing the password of the p12file.")
   option("--notary", help="🍏 Use the provided file as notary JSON.")
-  option("--timestamp", help="🪟 Use a timestamp URL to timestamp the executable.")
-  option("--gpgdir", help="🐧 The GnuPG directory containing the signing keys.")
-  option("--gpgkey", help="🐧 The password of the GnuPG file.")
+  option("--wincert", help="🪟 Use the provided certificate.")
+  option("--winidfile", help="🪟 The file containing the signing token ID.")
+  option("--winpinfile", help="🪟 The file containing the signing pin.")
 template signImp(keyfile:string) =
-  let config = if keyfile != "" and keyfile.fileExists: loadConfig(keyfile) else: newConfig()
   P12FILE = opts.p12file
   P12PASS = opts.p12pass
   NOTARY = opts.notary
-  GPGKEY = config.checkPass(opts.gpgkey, GPG_KEY_VAR, "No GnuPG password provided (--gpgkey)", os, linuxTargets, noSign)
-  let gpgdir {.inject.} = opts.gpgdir
-  let timestamp {.inject.} = opts.timestamp
+  WINCERT = opts.wincert
   for t in os:
-    if t == pMacos and not noSign.contains(t):
-      if P12FILE == "": kill "No p12 file provided"
-      elif not P12FILE.fileExists: kill "No p12 file " & P12FILE & " exists"
-      if P12PASS == "": kill "No p12 file password provided"
-      elif not P12PASS.fileExists: kill "No p12 file password " & P12PASS & " exists"
-      if NOTARY == "": kill "No notary JSON file provided"
-      elif not NOTARY.fileExists: kill "No notary JSON file " & NOTARY & " exists"
-    if linuxTargets.contains(t) and not noSign.contains(t):
-      if gpgdir=="": kill "No GnuPG directory provided"
-      elif not gpgdir.dirExists: kill "No GnuPG directory " & P12FILE & " exists"
-
-template sendOpt() =
-  option("--password", help="🍏 The Apple password")
-  option("--user", help="🍏 The Apple username")
-  option("--ascprovider", help="🍏 The specific associated provider for the current Apple developer account")
-template sendImp(strict:bool) =
-  let config = if keyfile != "" and keyfile.fileExists: loadConfig(keyfile) else: newConfig()
-  let ascprovider {.inject.} = if opts.ascprovider != "": opts.ascprovider else: getEnv(NOTARIZE_ASC_PROVIDER, config.getSectionValue("", NOTARIZE_ASC_PROVIDER))
-  PASSWORD = if opts.password != "": opts.password else: getEnv(NOTARIZE_APP_PASSWORD, config.getSectionValue("",NOTARIZE_APP_PASSWORD))
-  USER = if opts.user != "": opts.user else: getEnv(NOTARIZE_USER, config.getSectionValue("", NOTARIZE_USER))
-  if strict:
-    checkParam PASSWORD, "No password provided"
-    checkParam USER, "No user provided"
-
+    if not noSign.contains(t):
+      if t == pMacos:
+        if P12FILE == "": kill "No p12 file provided"
+        elif not P12FILE.fileExists: kill "No p12 file " & P12FILE & " exists"
+        if P12PASS == "": kill "No p12 file password provided"
+        elif not P12PASS.fileExists: kill "No p12 file password " & P12PASS & " exists"
+        if NOTARY == "": kill "No notary JSON file provided"
+        elif not NOTARY.fileExists: kill "No notary JSON file " & NOTARY & " exists"
+      if t in windowsTargets:
+        if WINCERT == "": kill "No Windows certificate file provided"
+        elif not WINCERT.fileExists: kill "No Windows certificate file " & WINCERT & " exists"
+        elif not WINCERT.endsWith(".pem"): kill "Only *.pem files are supported to sign Windows executables"
+        WINID = readContent(opts.winidfile, "signing token ID")
+        WINPIN = readContent(opts.winpinfile, "signing pin")
 
 const p = newParser("makeapp"):
   help("makeapp " & VERSION & "\n\nCreate, sign, and notarize DMG files for the Apple store, to make later versions of macOS happy.\nMore info at https://github.com/teras/makeapp")
@@ -218,7 +197,7 @@ Extras folder organization:
       noSignImp()
       signImp(keyfile)
       allImp()
-      safedo: createPack(os, templ, output, opts.target, noSign, timestamp, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
+      safedo: createPack(os, templ, output, opts.target, noSign, res, name, version, descr, url, vendor, cat, assoc)
       exit()
   command("sign"):
     option("-t", "--target", help="The location of the target file (DMG or Application.app). When missing the system will scan the directory tree below this point")
@@ -235,8 +214,7 @@ Extras folder organization:
       noSignImp()
       signImp(keyfile)
       allImp()
-      if os.contains(linuxTargets): kill "Signing on Linux is not supported; signing is supported only when packaging"
-      safedo: signApp(os, opts.target, timestamp, name, url)
+      safedo: signApp(os, opts.target, name)
       exit()
   when system.hostOS == "macosx":
     command("notarize"):
@@ -247,7 +225,6 @@ Extras folder organization:
       allOpt()
       run:
         keyfileImp()
-        sendImp(true)
         allImp()
         let target = if opts.target != "": opts.target else: getCurrentDir()
         let id = checkParam(if opts.id != "": opts.id else: loadPlist(findPlist(target)).getOrDefault("CFBundleIdentifier").getStr(""), "No Bundle ID provided")
@@ -264,8 +241,6 @@ Extras folder organization:
     ostypeOpt()
     noSignOpt()
     signOpt()
-    option("--notarize", help="🍏 Notarize DMG application after creation, boolean value. Defaults to false")
-    sendOpt()
     keyfileOpt()
     allOpt()
     run:
@@ -277,15 +252,10 @@ Extras folder organization:
       ostypeImp(false)
       noSignImp()
       signImp(keyfile)
-      let notarize = opts.notarize.isTrue and not noSign.contains(OSType.pMacos)
-      if opts.notarize.isTrue and noSign.contains(OSType.pMacos): echo "Warning: Requested to notarize application but asked to skip signing"
       let instoutput = if opts.instoutput == "": output else: opts.instoutput
-      sendImp(notarize)
       allImp()
       safedo: makeJava(os, output, res, name, version, input, jarname, jvmopts, assoc, extra, vendor, descr, id, url, jdk)
-      safedo: createPack(os, "", instoutput, output, noSign, timestamp, gpgdir, res, name, version, descr, url, vendor, cat, assoc)
-      if notarize:
-        safedo: sendToApple(id, instoutput / name & "-" & version & ".dmg", ascprovider)
+      safedo: createPack(os, "", instoutput, output, noSign, res, name, version, descr, url, vendor, cat, assoc)
       exit()
 p.run(commandLineParams())
 stdout.write(p.help)
