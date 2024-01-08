@@ -216,23 +216,6 @@ Extras folder organization:
       allImp()
       safedo: signApp(os, opts.target, name)
       exit()
-  when system.hostOS == "macosx":
-    command("notarize"):
-      sendOpt()
-      option("--id", help="Reverse URL unique identifier. When missing, the system guess from existing PList files inside an .app folder")
-      option("-t", "--target", help="The location of the DMG/ZIP file. When missing the system will scan the directory tree below this point")
-      keyfileOpt()
-      allOpt()
-      run:
-        keyfileImp()
-        allImp()
-        let target = if opts.target != "": opts.target else: getCurrentDir()
-        let id = checkParam(if opts.id != "": opts.id else: loadPlist(findPlist(target)).getOrDefault("CFBundleIdentifier").getStr(""), "No Bundle ID provided")
-        var fileToSend = findDmg(target)
-        if fileToSend == "": fileToSend = findZip(target)
-        if fileToSend == "":kill("No target file found")
-        safedo: sendToApple(id, fileToSend, ascprovider)
-        exit()
   command("create"):
     commonOutOpt()
     infoOpt(false)
